@@ -29,13 +29,24 @@ export class ApiError extends Error {
 async function request<T>(path: string, opts: FetchOpts = {}): Promise<T> {
   const { token, headers, ...rest } = opts;
   const url = `${config.apiUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  // Build headers explicitly so the conditional spreads don't fight TS's
+  // type narrowing of HeadersInit.
+  const finalHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    finalHeaders["Authorization"] = `Bearer ${token}`;
+  } else if (config.devUserId) {
+    // DEV: until NextAuth is wired, forward x-user-id. Backend's
+    // _current_user (app/api/web.py) reads this header.
+    finalHeaders["x-user-id"] = config.devUserId;
+  }
+  if (headers) {
+    Object.assign(finalHeaders, headers as Record<string, string>);
+  }
   const res = await fetch(url, {
     ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
+    headers: finalHeaders,
     cache: "no-store",
   });
 
