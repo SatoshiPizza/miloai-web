@@ -3,17 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Card, CardContent, CardHeader, CardTitle, CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  ArrowLeft, Rocket, Megaphone, Globe, Sparkles, Loader2, Check, X,
-  ChevronRight, Plug,
+  ArrowLeft, ArrowRight, Rocket, Sparkles, Check, AlertTriangle, X,
+  Loader2, Plug, Bell, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -23,17 +16,32 @@ import {
   type AccountsResponse,
   type WizardAuditResponse,
   type WizardLaunchResponse,
+  type WizardLaunchResult,
 } from "@/lib/tg-bridge";
+import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
+import { ScoreCircle } from "@/components/score-circle";
 
 type Step = 1 | 2 | 3 | 4 | 5;
+type PlatformKey = "meta" | "google";
 
+/**
+ * New-campaign wizard — design handoff iter-2 §Wizard (W1–W5).
+ *
+ * 5-step flow with consistent shell:
+ *   <Header>   — back link + peach rocket + Bricolage 28/700 title
+ *   <Stepper>  — sage done / peach active / cream pending circles
+ *   <WizardCard> title + subtitle + body + footer actions on cream strip
+ *
+ * State machine: platforms → service → budget → audit → launch result.
+ * Backend calls go through tgBridge (wizardAudit + wizardLaunch).
+ */
 export default function NewCampaignWizard() {
   const router = useRouter();
   const [step, setStep] = useState<Step>(1);
 
   // Step 1 — platforms
   const [accounts, setAccounts] = useState<AccountsResponse | null>(null);
-  const [platforms, setPlatforms] = useState<{ meta: boolean; google: boolean }>({
+  const [platforms, setPlatforms] = useState<Record<PlatformKey, boolean>>({
     meta: false,
     google: false,
   });
@@ -49,11 +57,10 @@ export default function NewCampaignWizard() {
   const [auditing, setAuditing] = useState(false);
   const [audit, setAudit] = useState<WizardAuditResponse | null>(null);
 
-  // Step 5 — launch result
+  // Step 5 — launch
   const [launching, setLaunching] = useState(false);
   const [launchResult, setLaunchResult] = useState<WizardLaunchResponse | null>(null);
 
-  // Initial: load services + accounts in parallel.
   useEffect(() => {
     Promise.all([tgBridge.services(), tgBridge.adAccounts()])
       .then(([s, a]) => {
@@ -89,11 +96,8 @@ export default function NewCampaignWizard() {
     }
   }, [serviceId, dailyEur, platforms]);
 
-  // Trigger audit when entering step 4.
   useEffect(() => {
-    if (step === 4 && !audit && !auditing) {
-      runAudit();
-    }
+    if (step === 4 && !audit && !auditing) runAudit();
   }, [step, audit, auditing, runAudit]);
 
   async function launch() {
@@ -116,334 +120,342 @@ export default function NewCampaignWizard() {
     }
   }
 
+  // Aggregate context line for step 2 subtitle
+  const ctxLabel = (() => {
+    if (platforms.meta && platforms.google) return "Запускаем в Meta + Google";
+    if (platforms.meta) return "Только Meta";
+    if (platforms.google) return "Только Google";
+    return "";
+  })();
+
   return (
-    <div className="p-8 max-w-3xl space-y-6">
-      <header>
-        <Link href="/campaigns" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-          <ArrowLeft className="size-3" /> Кампании
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight mt-2 flex items-center gap-2">
-          <Rocket className="size-5" /> Новая кампания
-        </h1>
-      </header>
+    <div className="flex justify-center min-h-screen">
+      <div className="w-full max-w-[760px] p-6 lg:p-8 space-y-5">
+        <Header />
+        <Stepper current={step} />
 
-      <Stepper current={step} />
-
-      {/* Step 1 — Platforms */}
-      {step === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Где запускаем?</CardTitle>
-            <CardDescription>
-              Выбери платформы. Если что-то не подключено — кликни «Подключить» и пройди OAuth.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <PlatformRow
-              icon={Megaphone}
-              label="Meta (Facebook + Instagram)"
-              connected={accounts?.has_meta ?? false}
-              enabled={platforms.meta}
-              onToggle={() => setPlatforms((p) => ({ ...p, meta: !p.meta }))}
-            />
-            <PlatformRow
-              icon={Globe}
-              label="Google Ads (Search)"
-              connected={accounts?.has_google ?? false}
-              enabled={platforms.google}
-              onToggle={() => setPlatforms((p) => ({ ...p, google: !p.google }))}
-            />
-
-            <div className="pt-2 flex justify-end">
-              <Button
-                onClick={() => setStep(2)}
-                disabled={!platforms.meta && !platforms.google}
-                size="lg"
-              >
-                Дальше <ChevronRight className="size-4 ml-1" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 2 — Service picker */}
-      {step === 2 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Какую услугу рекламируем?</CardTitle>
-            <CardDescription>
-              ✨ — креативы готовы (мгновенный запуск). ⚪ — сгенерируется при запуске (~30 сек).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!services ? (
+        {step === 1 && (
+          <WizardCard
+            title="Где запускаем?"
+            subtitle="Выбери платформы. Если что-то не подключено — кликни «Подключить» и пройди OAuth (1 минута)."
+            footer={
               <>
-                <Skeleton className="h-16" />
-                <Skeleton className="h-16" />
-                <Skeleton className="h-16" />
+                <FooterGhost onClick={() => router.push("/campaigns")}>← Отменить</FooterGhost>
+                <FooterPrimary
+                  onClick={() => setStep(2)}
+                  disabled={!platforms.meta && !platforms.google}
+                >
+                  Дальше <ArrowRight className="size-3.5" strokeWidth={2} />
+                </FooterPrimary>
               </>
-            ) : services.length === 0 ? (
-              <div className="p-6 text-sm text-muted-foreground text-center">
-                Услуг пока нет. Пройди онбординг через бота, чтобы я узнал твой бизнес.
+            }
+          >
+            <div className="flex flex-col gap-3">
+              {(["meta", "google"] as const).map((p) => (
+                <PlatformOption
+                  key={p}
+                  platform={p}
+                  connected={p === "meta" ? !!accounts?.has_meta : !!accounts?.has_google}
+                  enabled={platforms[p]}
+                  onConnect={async () => {
+                    try {
+                      const { url } = p === "meta"
+                        ? await tgBridge.metaOauthUrl()
+                        : await tgBridge.googleOauthUrl();
+                      window.open(url, "_blank", "noopener,noreferrer");
+                      toast.info("OAuth открылся в новой вкладке");
+                    } catch {
+                      toast.error("Не получилось получить OAuth-ссылку");
+                    }
+                  }}
+                  onToggle={() => setPlatforms((s) => ({ ...s, [p]: !s[p] }))}
+                />
+              ))}
+            </div>
+          </WizardCard>
+        )}
+
+        {step === 2 && (
+          <WizardCard
+            title="Какую услугу рекламируем?"
+            subtitle={
+              <span className="flex items-center gap-2 flex-wrap">
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-[10.5px] font-semibold uppercase tracking-[0.04em]"
+                  style={{
+                    background: "var(--peach-wash)",
+                    border: "1px solid var(--peach-soft)",
+                    color: "var(--peach-deep)",
+                  }}
+                >
+                  {platforms.meta && <MetaGlyph size={10} />}
+                  {platforms.google && <GoogleGlyph size={10} />}
+                  {ctxLabel.toUpperCase()}
+                </span>
+                <span className="text-[var(--ink-mute)]">· выбери что рекламируем</span>
+              </span>
+            }
+            footer={
+              <>
+                <FooterGhost onClick={() => setStep(1)}>← Назад</FooterGhost>
+                <FooterPrimary onClick={() => setStep(3)} disabled={!serviceId}>
+                  Дальше <ArrowRight className="size-3.5" strokeWidth={2} />
+                </FooterPrimary>
+              </>
+            }
+          >
+            <div className="flex flex-col gap-2">
+              {!services ? (
+                <>
+                  <Skeleton className="h-16" />
+                  <Skeleton className="h-16" />
+                  <Skeleton className="h-16" />
+                </>
+              ) : services.length === 0 ? (
+                <div className="py-6 text-center text-sm text-[var(--ink-mute)]">
+                  Услуг пока нет. Пройди онбординг через бота.
+                </div>
+              ) : (
+                services.map((s) => (
+                  <ServiceOption
+                    key={s.id}
+                    service={s}
+                    platforms={platforms}
+                    selected={s.id === serviceId}
+                    onClick={() => setServiceId(s.id)}
+                  />
+                ))
+              )}
+            </div>
+
+            <div
+              className="mt-3.5 px-3.5 py-2.5 rounded-lg flex items-center gap-2.5 text-[12.5px] cursor-pointer"
+              style={{
+                background: "var(--peach-wash)",
+                border: "1px dashed var(--peach-soft)",
+                color: "var(--peach-deep)",
+              }}
+            >
+              <Plus className="size-3.5" strokeWidth={2} />
+              Не вижу подходящую услугу — <span className="underline">добавить новую</span>
+            </div>
+          </WizardCard>
+        )}
+
+        {step === 3 && (
+          <WizardCard
+            title="Дневной бюджет"
+            subtitle="EUR в день на каждую выбранную платформу. Алгоритмы Meta и Google лучше учатся от €10/день."
+            footer={
+              <>
+                <FooterGhost onClick={() => setStep(2)}>← Назад</FooterGhost>
+                <FooterPrimary onClick={() => setStep(4)} disabled={dailyEur < 1}>
+                  <Sparkles className="size-3.5" strokeWidth={2} /> Запустить аудит
+                </FooterPrimary>
+              </>
+            }
+          >
+            {/* Big peach number block */}
+            <div
+              className="rounded-xl flex items-center justify-center gap-4 py-6 px-5"
+              style={{ background: "var(--peach-wash)", border: "1px solid var(--peach-soft)" }}
+            >
+              <div className="flex items-baseline">
+                <span
+                  className="font-mono font-medium text-[56px] leading-none tracking-[-0.03em] tabular-nums"
+                  style={{ color: "var(--peach-deep)" }}
+                >
+                  €
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  className="font-mono font-medium text-[56px] leading-none tracking-[-0.03em] tabular-nums text-foreground bg-transparent border-0 outline-none focus:ring-0 px-0"
+                  style={{ width: `${Math.max(2, budget.length)}ch` }}
+                />
               </div>
-            ) : (
-              services.map((s) => {
-                const selected = s.id === serviceId;
+              <div className="text-[15px] text-[var(--ink-mute)] self-end mb-1.5">
+                / день на каждую платформу
+              </div>
+            </div>
+
+            {/* Presets */}
+            <div className="grid grid-cols-6 gap-2 mt-3.5">
+              {[5, 10, 15, 25, 50, 100].map((v) => {
+                const active = Number(budget) === v;
                 return (
                   <button
-                    key={s.id}
-                    onClick={() => setServiceId(s.id)}
+                    key={v}
+                    onClick={() => setBudget(String(v))}
                     className={cn(
-                      "w-full text-left rounded-md border px-4 py-3 transition-colors",
-                      selected
-                        ? "border-primary bg-primary/5"
-                        : "hover:bg-muted/40"
+                      "py-2.5 px-3 rounded-lg font-mono text-[13px] font-medium tabular-nums transition-colors",
+                      active
+                        ? "bg-foreground text-background border border-foreground"
+                        : "bg-[var(--card-soft)] text-[var(--ink-mute)] hover:text-foreground border"
                     )}
+                    style={!active ? { borderColor: "var(--border)" } : undefined}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{s.name}</div>
-                        {s.description && (
-                          <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                            {s.description}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-1 text-xs shrink-0">
-                        <Badge variant="outline" className="gap-1 text-[10px]">
-                          <span>{s.has_meta_creatives ? "✨" : "⚪"}</span>M
-                        </Badge>
-                        <Badge variant="outline" className="gap-1 text-[10px]">
-                          <span>{s.has_google_rsa ? "✨" : "⚪"}</span>G
-                        </Badge>
-                      </div>
-                    </div>
+                    €{v}
                   </button>
                 );
-              })
-            )}
-            <div className="pt-2 flex justify-between">
-              <Button variant="ghost" onClick={() => setStep(1)}>← Назад</Button>
-              <Button onClick={() => setStep(3)} disabled={!serviceId} size="lg">
-                Дальше <ChevronRight className="size-4 ml-1" />
-              </Button>
+              })}
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Step 3 — Budget */}
-      {step === 3 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Дневной бюджет</CardTitle>
-            <CardDescription>
-              EUR в день <b>на каждую</b> выбранную платформу. Алгоритмы Meta/Google лучше учатся от €10/день.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="budget">€ в день</Label>
-              <Input
-                id="budget"
-                type="number"
-                min={1}
-                step={1}
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && dailyEur >= 1) setStep(4);
-                }}
-                autoFocus
-                className="text-lg w-32 tabular-nums"
-              />
-              <div className="flex gap-2 mt-2">
-                {[5, 10, 15, 25, 50].map((v) => (
-                  <Button key={v} variant="outline" size="sm" onClick={() => setBudget(String(v))}>
-                    €{v}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="pt-2 flex justify-between">
-              <Button variant="ghost" onClick={() => setStep(2)}>← Назад</Button>
-              <Button onClick={() => setStep(4)} disabled={dailyEur < 1} size="lg">
-                Аудит <ChevronRight className="size-4 ml-1" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            {/* AI Forecast */}
+            <BudgetForecast dailyEur={dailyEur} platforms={platforms} />
+          </WizardCard>
+        )}
 
-      {/* Step 4 — Audit */}
-      {step === 4 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="size-4" /> Анализ перед запуском
-            </CardTitle>
-            <CardDescription>
-              Проверяю настройки, бенчмарки и AI оценивает шансы. Это занимает 5-15 секунд.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {auditing || !audit ? (
-              <div className="space-y-2 py-3">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  AI читает метрики и сравнивает с benchmarks...
-                </div>
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="h-4 w-4/5" />
-              </div>
-            ) : (
+        {step === 4 && (
+          <WizardCard
+            title="Анализ перед запуском"
+            subtitle="Проверяю настройки, бенчмарки, AI оценивает шансы. 5–15 секунд."
+            footer={
               <>
-                <ul className="space-y-1.5">
-                  {audit.items.map((it, i) => (
-                    <li key={i} className="text-sm">
-                      <div className="flex items-start gap-2">
-                        <StatusIcon status={it.status} />
-                        <span>{it.message}</span>
-                      </div>
-                      {it.fix && it.status !== "ok" && (
-                        <div className="ml-6 text-xs text-muted-foreground italic">↳ {it.fix}</div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-
-                <div className="flex items-center justify-between border-t pt-3">
-                  <span className="font-semibold">Оценка: {audit.score}/10</span>
-                  <VerdictBadge recommendation={audit.recommendation} />
-                </div>
-
-                {audit.ai_summary && (
-                  <div className="rounded-md bg-muted/50 p-3 space-y-2">
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                      <Sparkles className="size-3" /> Что говорит AI
-                    </div>
-                    <p className="text-sm italic">{audit.ai_summary}</p>
-                    {audit.ai_priority_fix && (
-                      <div className="pt-1 border-t">
-                        <div className="text-xs font-medium">🎯 В первую очередь:</div>
-                        <div className="text-sm">{audit.ai_priority_fix}</div>
-                        {audit.ai_why_priority && (
-                          <div className="text-xs text-muted-foreground mt-1 italic">
-                            {audit.ai_why_priority}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="pt-2 flex justify-between">
-                  <Button variant="ghost" onClick={() => setStep(3)} disabled={launching}>
-                    ← Изменить бюджет
-                  </Button>
-                  <Button
-                    onClick={launch}
-                    disabled={launching || audit.recommendation === "do_not_launch"}
-                    size="lg"
-                  >
-                    {launching ? (
-                      <><Loader2 className="size-4 animate-spin mr-2" />Запускаю...</>
-                    ) : (
-                      <><Rocket className="size-4 mr-2" />Запустить</>
-                    )}
-                  </Button>
-                </div>
+                <FooterGhost onClick={() => { setAudit(null); setStep(3); }} disabled={launching}>
+                  ← Изменить бюджет
+                </FooterGhost>
+                <FooterPrimary
+                  onClick={launch}
+                  disabled={launching || !audit || audit.recommendation === "do_not_launch"}
+                >
+                  {launching ? (
+                    <><Loader2 className="size-3.5 animate-spin" /> Запускаю...</>
+                  ) : (
+                    <><Rocket className="size-3.5" strokeWidth={1.8} /> Запустить</>
+                  )}
+                </FooterPrimary>
               </>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            }
+          >
+            <AuditBody audit={audit} loading={auditing} />
+          </WizardCard>
+        )}
 
-      {/* Step 5 — Result */}
-      {step === 5 && launchResult && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Отчёт о запуске</CardTitle>
-            <CardDescription>
-              Все кампании создаются в статусе PAUSED — открой Ads Manager,
-              проверь и активируй когда готов.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {launchResult.results.map((r) => (
-              <div
-                key={r.platform}
-                className={cn(
-                  "rounded-md border px-4 py-3",
-                  r.ok ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20" : "border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20"
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium flex items-center gap-2">
-                    {r.platform === "meta" ? "📘 Meta" : "🔍 Google"}
-                    {r.ok ? (
-                      <Check className="size-4 text-emerald-600" />
-                    ) : (
-                      <X className="size-4 text-red-600" />
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {r.ok ? r.detail : r.error}
-                  </div>
-                </div>
-                {r.ok && r.campaign_id && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    campaign_id: <code>{r.campaign_id}</code>
-                  </div>
-                )}
-              </div>
-            ))}
-            <div className="pt-2 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => router.push("/campaigns")}>
-                Все кампании
-              </Button>
-              <Button onClick={() => router.push("/dashboard")}>На dashboard</Button>
+        {step === 5 && launchResult && (
+          <WizardCard
+            title="Кампания запущена 🎉"
+            subtitle="Все объекты созданы в статусе Paused. Проверь в Ads Manager и активируй — или дай команду «активируй» из Telegram."
+            footer={
+              <>
+                <FooterGhost onClick={() => router.push("/campaigns")}>К списку</FooterGhost>
+                <FooterPrimary onClick={() => router.push("/campaigns")}>
+                  Открыть кампанию <ArrowRight className="size-3.5" strokeWidth={2} />
+                </FooterPrimary>
+              </>
+            }
+          >
+            <div className="flex flex-col gap-2.5">
+              {launchResult.results.map((r) => (
+                <LaunchResultRow key={r.platform} result={r} />
+              ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+
+            <div
+              className="mt-3.5 px-4 py-3.5 rounded-xl flex items-start gap-2.5"
+              style={{ background: "var(--peach-wash)", border: "1px solid var(--peach-soft)" }}
+            >
+              <Bell className="size-4 mt-0.5 text-[var(--peach-deep)] shrink-0" strokeWidth={1.6} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13.5px] font-medium text-foreground mb-1 tracking-[-0.005em]">
+                  Я буду присматривать за метриками
+                </div>
+                <div className="text-[12.5px] text-[var(--ink-mute)] leading-[1.5]">
+                  Через 24 ч пришлю в Telegram first-look отчёт. Если CPA скакнёт или CTR упадёт — оповещу сразу.
+                </div>
+              </div>
+            </div>
+          </WizardCard>
+        )}
+      </div>
     </div>
   );
 }
 
 
-// ── small components ──
+// ─────────────────────────────────────────────────────────
+// Shell components
+// ─────────────────────────────────────────────────────────
+
+
+function Header() {
+  return (
+    <div>
+      <Link
+        href="/campaigns"
+        className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-mute)] hover:text-foreground mb-2"
+      >
+        <ArrowLeft className="size-3" /> Кампании
+      </Link>
+      <div className="flex items-center gap-3">
+        <div
+          className="size-11 rounded-xl flex items-center justify-center shrink-0"
+          style={{
+            background: "linear-gradient(135deg, var(--peach), var(--peach-deep))",
+            boxShadow: "0 6px 18px -6px rgba(232,149,108,0.5)",
+          }}
+        >
+          <Rocket className="size-5 text-white" strokeWidth={1.8} />
+        </div>
+        <div>
+          <h1 className="font-heading text-[28px] font-bold tracking-[-0.025em] leading-tight text-foreground">
+            Новая кампания
+          </h1>
+          <p className="text-[13.5px] text-[var(--ink-mute)] mt-0.5">
+            AI проведёт тебя по 5 шагам и поможет с аудитом перед запуском
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function Stepper({ current }: { current: Step }) {
-  const labels = ["Платформы", "Услуга", "Бюджет", "Аудит", "Готово"];
+  const labels = ["Платформы", "Услуга", "Бюджет", "Аудит", "Готово"] as const;
   return (
-    <div className="flex items-center gap-2 text-xs">
-      {labels.map((lbl, i) => {
+    <div
+      className="flex items-center gap-2 rounded-xl px-4 py-3.5 bg-card border"
+      style={{ borderColor: "var(--border)" }}
+    >
+      {labels.map((label, i) => {
         const n = (i + 1) as Step;
-        const active = n === current;
         const done = n < current;
+        const active = n === current;
         return (
-          <div key={i} className="flex items-center gap-2">
-            <div
-              className={cn(
-                "size-5 rounded-full flex items-center justify-center text-[10px] font-medium",
-                done && "bg-emerald-500 text-white",
-                active && "bg-primary text-primary-foreground",
-                !done && !active && "bg-muted text-muted-foreground"
-              )}
-            >
-              {done ? <Check className="size-3" /> : n}
+          <div key={label} className="flex items-center gap-2 flex-1 last:flex-none">
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div
+                className={cn(
+                  "size-6 rounded-full flex items-center justify-center font-mono text-[11.5px] font-semibold tabular-nums",
+                  done && "bg-[var(--sage)] text-white",
+                  active && "bg-[var(--peach)] text-white",
+                  !done && !active && "bg-[var(--card-soft)] text-[var(--ink-subtle)] border"
+                )}
+                style={{
+                  boxShadow: active ? "0 0 0 4px rgba(232,149,108,0.18)" : undefined,
+                  borderColor: !done && !active ? "var(--border)" : undefined,
+                }}
+              >
+                {done ? <Check className="size-3" strokeWidth={2.5} /> : n}
+              </div>
+              <div
+                className={cn(
+                  "text-[12.5px] tracking-[-0.005em] hidden sm:block",
+                  active ? "text-foreground font-medium" : done ? "text-[var(--ink-mute)]" : "text-[var(--ink-subtle)]"
+                )}
+              >
+                {label}
+              </div>
             </div>
-            <span className={cn(
-              "tracking-tight",
-              active ? "text-foreground font-medium" : "text-muted-foreground"
-            )}>
-              {lbl}
-            </span>
             {i < labels.length - 1 && (
-              <ChevronRight className="size-3 text-muted-foreground/40 mx-1" />
+              <div
+                className="h-px flex-1 mx-1"
+                style={{ background: done ? "rgba(133, 162, 117, 0.4)" : "rgba(31, 29, 26, 0.06)" }}
+              />
             )}
           </div>
         );
@@ -452,72 +464,511 @@ function Stepper({ current }: { current: Step }) {
   );
 }
 
-function PlatformRow({
-  icon: Icon,
-  label,
-  connected,
-  enabled,
-  onToggle,
+
+function WizardCard({
+  title, subtitle, footer, children,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
+  title: string;
+  subtitle?: React.ReactNode;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl bg-card border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+      <div className="px-6 pt-5 pb-1">
+        <h2 className="font-heading text-[20px] font-bold tracking-[-0.02em] text-foreground">
+          {title}
+        </h2>
+        {subtitle && (
+          <div className="text-[13.5px] text-[var(--ink-mute)] mt-1.5 leading-[1.5]">
+            {subtitle}
+          </div>
+        )}
+      </div>
+      <div className="px-6 py-4">{children}</div>
+      {footer && (
+        <div
+          className="px-6 py-3.5 flex items-center gap-2.5 border-t"
+          style={{ background: "var(--card-soft)", borderColor: "rgba(31,29,26,0.06)" }}
+        >
+          {footer}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function FooterPrimary({
+  children, onClick, disabled,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "ml-auto inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[13.5px] font-medium tracking-[-0.005em] transition-all bg-[var(--peach)] text-white",
+        disabled ? "opacity-45 cursor-not-allowed" : "hover:brightness-105 active:brightness-95 cursor-pointer"
+      )}
+      style={{ boxShadow: disabled ? "none" : "0 4px 14px -4px rgba(232,149,108,0.5)" }}
+    >
+      {children}
+    </button>
+  );
+}
+
+
+function FooterGhost({
+  children, onClick, disabled,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[13.5px] font-medium text-[var(--ink-mute)] hover:text-foreground transition-colors",
+        disabled && "opacity-45 cursor-not-allowed"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────
+// Step 1 — Platform option row
+// ─────────────────────────────────────────────────────────
+
+
+function PlatformOption({
+  platform, connected, enabled, onToggle, onConnect,
+}: {
+  platform: PlatformKey;
   connected: boolean;
   enabled: boolean;
   onToggle: () => void;
+  onConnect: () => void;
 }) {
-  if (!connected) {
-    return (
-      <Link href="/accounts" className="block">
-        <div className="rounded-md border border-dashed px-4 py-3 flex items-center justify-between hover:bg-muted/40 transition-colors">
-          <div className="flex items-center gap-3">
-            <Icon className="size-4 text-muted-foreground" />
-            <div>
-              <div className="font-medium text-sm">{label}</div>
-              <div className="text-xs text-muted-foreground">не подключено</div>
-            </div>
-          </div>
-          <Badge variant="outline" className="gap-1">
-            <Plug className="size-3" />
-            Подключить
-          </Badge>
-        </div>
-      </Link>
-    );
-  }
+  const isMeta = platform === "meta";
+  const colorBg = isMeta ? "var(--meta-soft)" : "#F4FAEF";
+  const colorBorder = isMeta ? "#CDDDFA" : "#D9E7CC";
+  const colorInk = isMeta ? "var(--meta-ink)" : "var(--google-ink)";
+  const name = isMeta ? "Meta Ads" : "Google Ads";
+  const sub = isMeta
+    ? "Facebook + Instagram · Business Manager · OAuth обязателен"
+    : "Search + Performance Max · MCC + developer-token обязательны";
+  const highlight = isMeta
+    ? "Здесь обычно лучше для emotional / visual креативов"
+    : "Берёт горячий трафик — те кто ищет «имплант tallinn»";
+
+  const handleClick = () => {
+    if (!connected) onConnect();
+    else onToggle();
+  };
+
   return (
     <button
-      onClick={onToggle}
-      className={cn(
-        "w-full rounded-md border px-4 py-3 flex items-center justify-between transition-colors text-left",
-        enabled ? "border-primary bg-primary/5" : "hover:bg-muted/40"
-      )}
+      onClick={handleClick}
+      className="flex items-start gap-3.5 p-4 rounded-xl border text-left transition-all w-full"
+      style={{
+        background: connected && enabled ? `${colorBg}55` : "var(--card-soft)",
+        borderColor: connected && enabled ? colorBorder : "var(--border)",
+      }}
     >
-      <div className="flex items-center gap-3">
-        <Icon className="size-4" />
-        <div className="font-medium text-sm">{label}</div>
+      <div
+        className="size-10 rounded-[10px] bg-white border flex items-center justify-center shrink-0"
+        style={{ borderColor: connected && enabled ? colorBorder : "var(--border)" }}
+      >
+        {isMeta ? <MetaGlyph size={20} /> : <GoogleGlyph size={20} />}
       </div>
-      <div className={cn(
-        "size-4 rounded border flex items-center justify-center",
-        enabled ? "bg-primary border-primary" : "border-muted-foreground/40"
-      )}>
-        {enabled && <Check className="size-3 text-primary-foreground" />}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <span className="text-[15px] font-semibold text-foreground tracking-[-0.01em]">{name}</span>
+          {connected ? (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.04em]"
+              style={{ background: "var(--sage-soft)", color: "#456838" }}
+            >
+              <span className="size-1.5 rounded-full bg-[var(--sage)]" />
+              Подключено
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.04em]"
+              style={{ background: "var(--card-soft)", color: "var(--ink-subtle)", border: "1px solid var(--border)" }}
+            >
+              <Plug className="size-2.5" /> Подключить
+            </span>
+          )}
+        </div>
+        <div className="font-mono text-[11.5px] text-[var(--ink-mute)] leading-[1.5] mb-1.5">{sub}</div>
+        <div className="text-[12.5px] italic leading-snug" style={{ color: colorInk }}>{highlight}</div>
+      </div>
+      <div
+        className="size-[22px] rounded-md flex items-center justify-center shrink-0 mt-1"
+        style={{
+          background: enabled && connected ? "var(--peach)" : "transparent",
+          border: `1.5px solid ${enabled && connected ? "var(--peach)" : "var(--border)"}`,
+        }}
+      >
+        {enabled && connected && <Check className="size-3 text-white" strokeWidth={2.5} />}
       </div>
     </button>
   );
 }
 
-function StatusIcon({ status }: { status: string }) {
-  if (status === "ok") return <span className="text-emerald-500 shrink-0">✅</span>;
-  if (status === "warn") return <span className="text-amber-500 shrink-0">⚠️</span>;
-  return <span className="text-red-500 shrink-0">❌</span>;
+
+// ─────────────────────────────────────────────────────────
+// Step 2 — Service option row
+// ─────────────────────────────────────────────────────────
+
+
+function ServiceOption({
+  service, platforms, selected, onClick,
+}: {
+  service: ServiceSummary;
+  platforms: Record<PlatformKey, boolean>;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const showMeta = platforms.meta;
+  const showGoogle = platforms.google;
+  const metaReady = service.has_meta_creatives;
+  const googleReady = service.has_google_rsa;
+
+  let statusIcon: string | null = null;
+  let statusText: string | null = null;
+  let statusColor = "var(--ink-mute)";
+  if (showMeta && showGoogle) {
+    if (metaReady && googleReady) {
+      statusIcon = "✨"; statusText = "Всё готово — мгновенный запуск"; statusColor = "var(--sage)";
+    } else if (!metaReady && !googleReady) {
+      statusIcon = "⊙"; statusText = "AI сгенерирует креативы при запуске (~30 сек)";
+    } else {
+      statusIcon = "⊙";
+      statusText = metaReady
+        ? "Meta готова · Google сгенерируется (~30 сек)"
+        : "Google готов · Meta сгенерируется (~30 сек)";
+      statusColor = "var(--warn)";
+    }
+  } else if (showMeta) {
+    statusIcon = metaReady ? "✨" : "⊙";
+    statusText = metaReady ? "Готово — 3 креатива" : "AI сгенерирует креативы при запуске (~30 сек)";
+    statusColor = metaReady ? "var(--sage)" : "var(--ink-mute)";
+  } else if (showGoogle) {
+    statusIcon = googleReady ? "✨" : "⊙";
+    statusText = googleReady ? "Готово — 15 headlines" : "AI сгенерирует RSA при запуске (~30 сек)";
+    statusColor = googleReady ? "var(--sage)" : "var(--ink-mute)";
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3.5 px-4 py-3.5 rounded-xl border text-left transition-all w-full"
+      style={{
+        background: selected ? "var(--peach-wash)" : "transparent",
+        borderColor: selected ? "var(--peach)" : "var(--border)",
+      }}
+    >
+      <div
+        className="size-[18px] rounded-full flex items-center justify-center shrink-0"
+        style={{ border: `1.5px solid ${selected ? "var(--peach)" : "var(--border)"}` }}
+      >
+        {selected && <div className="size-2 rounded-full bg-[var(--peach)]" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[14px] font-medium text-foreground tracking-[-0.005em]">
+            {service.name}
+          </span>
+          {service.price && (
+            <span className="font-mono text-[11px] text-[var(--ink-subtle)] tabular-nums">
+              {service.price_currency === "EUR" ? "€" : ""}{Math.round(service.price)}
+            </span>
+          )}
+        </div>
+        {service.description && (
+          <div className="text-[12px] text-[var(--ink-mute)] mt-0.5 leading-[1.45] truncate">
+            {service.description}
+          </div>
+        )}
+        {statusText && (
+          <div
+            className="inline-flex items-center gap-1.5 mt-1.5 text-[11.5px] font-medium tracking-[-0.005em]"
+            style={{ color: statusColor }}
+          >
+            <span className="text-[12px] leading-none">{statusIcon}</span>
+            {statusText}
+          </div>
+        )}
+      </div>
+    </button>
+  );
 }
 
-function VerdictBadge({ recommendation }: { recommendation: string }) {
-  if (recommendation === "launch") {
-    return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">✅ Готова</Badge>;
+
+// ─────────────────────────────────────────────────────────
+// Step 3 — Budget AI forecast
+// ─────────────────────────────────────────────────────────
+
+
+function BudgetForecast({
+  dailyEur, platforms,
+}: {
+  dailyEur: number;
+  platforms: Record<PlatformKey, boolean>;
+}) {
+  const platformCount = (platforms.meta ? 1 : 0) + (platforms.google ? 1 : 0);
+  const monthly = dailyEur * platformCount * 30;
+  const convRate = 0.038;
+  const leadsLow = Math.max(1, Math.round((monthly * convRate) / 1.2));
+  const leadsHigh = Math.max(2, Math.round((monthly * convRate) * 1.2));
+  const cplLow = Math.max(5, Math.round(monthly / leadsHigh));
+  const cplHigh = Math.max(10, Math.round(monthly / leadsLow));
+  const benchmark = Math.round(cplHigh * 1.6);
+
+  return (
+    <div
+      className="rounded-xl flex items-start gap-3 p-4 mt-4"
+      style={{
+        background: "linear-gradient(135deg, #FCF1E8 0%, #F8E8D9 100%)",
+        border: "1px solid #F5DDC8",
+      }}
+    >
+      <Sparkles className="size-[18px] text-[var(--peach)] mt-0.5 shrink-0" strokeWidth={1.6} />
+      <div className="flex-1 min-w-0">
+        <div className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--peach-deep)] mb-1.5">
+          AI · ПРОГНОЗ
+        </div>
+        <div className="text-[13px] leading-[1.55] tracking-[-0.005em]">
+          При <b>€{dailyEur.toFixed(0)}/день × {platformCount} платформ{platformCount === 1 ? "ы" : ""}</b>{" "}
+          и стандартных бенчмарках по нише:
+        </div>
+        <div className="grid grid-cols-3 gap-2.5 mt-2.5">
+          <ForecastTile label="Месячный бюджет" value={`€${monthly.toFixed(0)}`} />
+          <ForecastTile label="Прогноз лидов" value={`${leadsLow}–${leadsHigh}`} sub={`${(convRate * 100).toFixed(1)}% conv`} />
+          <ForecastTile label="Ожидаемый CPL" value={`€${cplLow}–${cplHigh}`} sub={`бенчмарк €${benchmark}`} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function ForecastTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg py-2 px-2.5 bg-white/65">
+      <div className="font-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[var(--peach-deep)]">
+        {label}
+      </div>
+      <div className="font-mono text-[16px] font-medium tabular-nums tracking-[-0.01em] text-foreground mt-0.5">
+        {value}
+      </div>
+      {sub && <div className="font-mono text-[10px] text-[var(--ink-subtle)] mt-px">{sub}</div>}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────
+// Step 4 — Audit body
+// ─────────────────────────────────────────────────────────
+
+
+function AuditBody({ audit, loading }: { audit: WizardAuditResponse | null; loading: boolean }) {
+  if (loading || !audit) {
+    return (
+      <div className="space-y-2 py-3">
+        <div className="flex items-center gap-2 text-sm text-[var(--ink-mute)]">
+          <Loader2 className="size-4 animate-spin" /> AI читает метрики и сравнивает с benchmarks...
+        </div>
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-4 w-4/5" />
+      </div>
+    );
   }
-  if (recommendation === "fix_first") {
-    return <Badge className="bg-amber-100 text-amber-700 border-amber-200">⚠️ Можно с риском</Badge>;
-  }
-  return <Badge className="bg-red-100 text-red-700 border-red-200">❌ Не запускать</Badge>;
+
+  const verdictLabel = audit.recommendation === "launch"
+    ? "Запускать можно"
+    : audit.recommendation === "fix_first"
+      ? "Можно с риском"
+      : "Не запускать";
+  const verdictBg = audit.recommendation === "launch"
+    ? "var(--sage-soft)"
+    : audit.recommendation === "fix_first"
+      ? "#FBEDD3"
+      : "#F7DDD0";
+  const verdictColor = audit.recommendation === "launch"
+    ? "#456838"
+    : audit.recommendation === "fix_first"
+      ? "var(--warn)"
+      : "var(--destructive)";
+
+  return (
+    <>
+      {/* Score + verdict header */}
+      <div
+        className="rounded-xl flex items-center gap-5 p-5"
+        style={{ background: "var(--card-soft)", border: "1px solid var(--border)" }}
+      >
+        <ScoreCircle score={audit.score} />
+        <div className="flex-1 min-w-0">
+          <div className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-subtle)]">
+            ВЕРДИКТ AI
+          </div>
+          <div className="font-heading text-[22px] font-bold tracking-[-0.02em] mt-1">
+            {verdictLabel}
+          </div>
+          {audit.ai_summary && (
+            <div className="text-[13.5px] text-[var(--ink-mute)] mt-1.5 leading-[1.5] tracking-[-0.005em]">
+              {audit.ai_summary}
+            </div>
+          )}
+        </div>
+        <div
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold"
+          style={{ background: verdictBg, color: verdictColor }}
+        >
+          {audit.recommendation === "launch" ? (
+            <Check className="size-3" strokeWidth={2.5} />
+          ) : audit.recommendation === "fix_first" ? (
+            <AlertTriangle className="size-3" strokeWidth={2.2} />
+          ) : (
+            <X className="size-3" strokeWidth={2.2} />
+          )}
+          {audit.recommendation === "launch"
+            ? "Готова"
+            : audit.recommendation === "fix_first"
+              ? "Внимание"
+              : "Стоп"}
+        </div>
+      </div>
+
+      {/* Items */}
+      <div className="mt-3.5 space-y-2">
+        {audit.items.map((it, i) => <AuditItemCard key={i} item={it} />)}
+      </div>
+
+      {/* AI priority fix */}
+      {audit.ai_priority_fix && (
+        <div
+          className="mt-4 rounded-xl flex items-start gap-3 p-3.5"
+          style={{
+            background: "linear-gradient(135deg, #FCF1E8 0%, #F8E8D9 100%)",
+            border: "1px solid #F5DDC8",
+          }}
+        >
+          <Sparkles className="size-5 text-[var(--peach)] shrink-0" strokeWidth={1.6} />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--peach-deep)] mb-1.5">
+              🎯 Приоритет AI
+            </div>
+            <div className="text-[14px] font-medium text-foreground tracking-[-0.005em]">
+              {audit.ai_priority_fix}
+            </div>
+            {audit.ai_why_priority && (
+              <div className="text-[12.5px] text-[var(--ink-mute)] mt-1 leading-[1.5]">
+                {audit.ai_why_priority}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
+function AuditItemCard({ item }: { item: { status: string; message: string; fix: string | null } }) {
+  const color = item.status === "ok" ? "var(--sage)" : item.status === "warn" ? "var(--warn)" : "var(--destructive)";
+  const bg = item.status === "ok" ? "var(--sage-soft)" : item.status === "warn" ? "#FBEDD3" : "#F7DDD0";
+  const Icon = item.status === "ok" ? Check : AlertTriangle;
+  return (
+    <div
+      className="rounded-lg bg-card border p-3.5 flex items-start gap-2.5"
+      style={{ borderLeftWidth: 3, borderLeftColor: color, borderColor: "var(--border)" }}
+    >
+      <div
+        className="size-[18px] rounded-full flex items-center justify-center shrink-0 mt-0.5"
+        style={{ background: bg }}
+      >
+        <Icon className="size-3" style={{ color }} strokeWidth={2.4} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[13.5px] text-foreground leading-[1.5] tracking-[-0.005em]">
+          {item.message}
+        </div>
+        {item.fix && (
+          <div className="text-[12px] italic text-[var(--ink-mute)] mt-1 leading-[1.5]">
+            ↳ {item.fix}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────
+// Step 5 — Launch result row
+// ─────────────────────────────────────────────────────────
+
+
+function LaunchResultRow({ result }: { result: WizardLaunchResult }) {
+  const ok = result.ok;
+  const isMeta = result.platform === "meta";
+  const Glyph = isMeta ? MetaGlyph : GoogleGlyph;
+  return (
+    <div
+      className="rounded-xl p-3.5 flex items-start gap-3"
+      style={{
+        background: ok ? "rgba(220, 230, 211, 0.4)" : "var(--peach-wash)",
+        border: `1px solid ${ok ? "#BFD0B0" : "#E8B59C"}`,
+      }}
+    >
+      <div
+        className="size-8 rounded-lg bg-white flex items-center justify-center shrink-0"
+        style={{ border: `1px solid ${ok ? "#BFD0B0" : "#E8B59C"}` }}
+      >
+        <Glyph size={16} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <span className="text-[14px] font-semibold text-foreground tracking-[-0.005em]">
+            {isMeta ? "Meta" : "Google Ads"}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[9.5px] font-semibold uppercase tracking-[0.04em] text-white"
+            style={{ background: ok ? "var(--sage)" : "var(--destructive)" }}
+          >
+            {ok ? <Check className="size-2.5" strokeWidth={2.5} /> : <X className="size-2.5" strokeWidth={2.5} />}
+            {ok ? "CREATED" : "FAILED"}
+          </span>
+        </div>
+        {ok ? (
+          <>
+            <div className="text-[12.5px] text-[var(--ink-mute)] leading-[1.5]">{result.detail}</div>
+            {result.campaign_id && (
+              <div className="font-mono text-[11px] text-[var(--ink-subtle)] mt-1 tabular-nums">
+                {isMeta ? "meta_camp_" : "google_camp_"}
+                {result.campaign_id}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-[12.5px] text-[var(--ink-mute)] leading-[1.5]">{result.error}</div>
+        )}
+      </div>
+    </div>
+  );
 }
