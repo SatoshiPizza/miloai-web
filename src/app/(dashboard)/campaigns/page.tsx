@@ -16,6 +16,7 @@ import {
   Rocket, Search, Flame, TriangleAlert, Lightbulb, ChevronRight,
 } from "lucide-react";
 import { tgBridge, type CampaignSummary, type CampaignTotals } from "@/lib/tg-bridge";
+import { Sparkline, fakeWeekCurve } from "@/components/sparkline";
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<CampaignSummary[] | null>(null);
@@ -156,12 +157,30 @@ export default function CampaignsPage() {
                   </div>
 
                   {/* Metrics */}
-                  <div className="col-span-12 md:col-span-6 grid grid-cols-5 gap-2 text-xs">
+                  <div className="col-span-12 md:col-span-4 grid grid-cols-5 gap-2 text-xs">
                     <Metric label="Spend" value={`€${c.spend.toFixed(0)}`} />
                     <Metric label="Clicks" value={c.clicks.toLocaleString()} />
                     <Metric label="Conv" value={c.conversions.toString()} />
                     <Metric label="CPA" value={c.cpa != null ? `€${c.cpa.toFixed(0)}` : "—"} />
                     <Metric label="CTR" value={c.ctr != null ? `${(c.ctr * 100).toFixed(1)}%` : "—"} />
+                  </div>
+
+                  {/* 7-day sparkline — colored by platform, or warn when anomalies */}
+                  <div className="hidden md:flex col-span-2 items-center justify-end">
+                    <Sparkline
+                      values={fakeWeekCurve(`${c.platform}-${c.id}`, Math.max(c.spend, 1))}
+                      color={
+                        c.anomalies.some((a) => a.severity === "critical")
+                          ? "var(--destructive)"
+                          : c.platform === "meta"
+                            ? "var(--meta)"
+                            : c.platform === "google"
+                              ? "var(--google)"
+                              : "var(--peach)"
+                      }
+                      width={88}
+                      height={28}
+                    />
                   </div>
 
                   <ChevronRight className="hidden md:block col-span-1 size-4 text-muted-foreground ml-auto" />

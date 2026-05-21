@@ -11,23 +11,28 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
-import { tgBridge, type DashboardKpi, type CampaignSummary } from "@/lib/tg-bridge";
+import { tgBridge, type DashboardKpi, type CampaignSummary, type Me } from "@/lib/tg-bridge";
+import { AiChatMini } from "@/components/ai-chat-mini";
+import { Sparkline, fakeWeekCurve } from "@/components/sparkline";
 
 export default function DashboardPage() {
   const [kpi, setKpi] = useState<DashboardKpi | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignSummary[] | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const [k, c] = await Promise.all([
+        const [k, c, m] = await Promise.all([
           tgBridge.kpi(),
           tgBridge.campaigns(),
+          tgBridge.me().catch(() => null),
         ]);
         setKpi(k);
         setCampaigns(c.campaigns);
+        setMe(m);
       } catch (e) {
         console.error(e);
         setError("Не удалось загрузить данные. Backend на :8000?");
@@ -45,8 +50,8 @@ export default function DashboardPage() {
     .slice(0, 5);
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl">
-      <header className="flex items-start justify-between gap-4">
+    <div className="p-8 max-w-[1400px]">
+      <header className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="font-heading text-[28px] font-bold tracking-tight leading-tight">
             Dashboard
@@ -61,6 +66,10 @@ export default function DashboardPage() {
           </Button>
         </Link>
       </header>
+
+      {/* Two-column layout per design handoff: main (flex-1) + right (320px). */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex-1 min-w-0 space-y-8">
 
       {/* AI Insights peach card — design highlight (handoff §Dashboard) */}
       <AiInsightsCard kpi={kpi} loading={loading} />
@@ -152,6 +161,20 @@ export default function DashboardPage() {
                       <span>👆 {c.clicks}</span>
                       <span>🎯 {c.conversions}</span>
                       <span>CPA {c.cpa != null ? formatEur(c.cpa) : "—"}</span>
+                      <Sparkline
+                        values={fakeWeekCurve(`${c.platform}-${c.id}`, Math.max(c.spend, 1))}
+                        color={
+                          c.anomalies.some((a) => a.severity === "critical")
+                            ? "var(--destructive)"
+                            : c.platform === "meta"
+                              ? "var(--meta)"
+                              : c.platform === "google"
+                                ? "var(--google)"
+                                : "var(--peach)"
+                        }
+                        width={72}
+                        height={24}
+                      />
                     </div>
                   </Link>
                 ))}
@@ -161,37 +184,42 @@ export default function DashboardPage() {
         </Card>
       </section>
 
-      {/* Аномалии */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            Что изменилось за 24ч
-          </h2>
         </div>
-        <Card>
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="p-6"><Skeleton className="h-10 w-full" /></div>
-            ) : allAnomalies.length === 0 ? (
-              <div className="p-6 text-sm text-muted-foreground text-center">
-                Всё стабильно. Аномалий не обнаружено.
-              </div>
-            ) : (
-              <ul className="divide-y">
-                {allAnomalies.map((a, i) => (
-                  <li key={i} className="px-4 py-3 flex items-start gap-2 text-sm">
-                    <AnomalyIcon severity={a.severity} />
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium">{a.campaign}</span>{" "}
-                      <span className="text-muted-foreground">— {a.message}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </section>
+
+        {/* Right column — AI Chat Mini + Anomalies feed */}
+        <aside className="w-full lg:w-[320px] shrink-0 space-y-6">
+          <AiChatMini paired={me?.has_telegram_paired ?? false} />
+
+          <div>
+            <h2 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-subtle)] mb-2.5 px-1">
+              Изменения · 24ч
+            </h2>
+            <Card>
+              <CardContent className="p-0">
+                {loading ? (
+                  <div className="p-4"><Skeleton className="h-10 w-full" /></div>
+                ) : allAnomalies.length === 0 ? (
+                  <div className="p-5 text-xs text-[var(--ink-subtle)] text-center">
+                    Всё стабильно.
+                  </div>
+                ) : (
+                  <ul className="divide-y">
+                    {allAnomalies.slice(0, 4).map((a, i) => (
+                      <li key={i} className="px-3.5 py-2.5 flex items-start gap-2 text-[12.5px]">
+                        <AnomalyIcon severity={a.severity} />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{a.campaign}</div>
+                          <div className="text-[var(--ink-mute)] mt-0.5">{a.message}</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
