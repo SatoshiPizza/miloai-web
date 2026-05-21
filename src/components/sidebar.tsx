@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutGrid, Rocket, FolderOpen, MessageCircle, Image as ImageIcon,
-  Globe, Inbox, BarChart3, Users, Plug, Settings,
+  Globe, Inbox, BarChart3, TrendingUp, Users, Plug, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +27,7 @@ const TOP_NAV = [
   { href: "/creatives",  label: "Креативы",    icon: ImageIcon },
   { href: "/landings",   label: "Лендинги",    icon: Globe },
   { href: "/inbox",      label: "Lead Inbox",  icon: Inbox },
+  { href: "/analytics",  label: "Аналитика",   icon: TrendingUp },
   { href: "/competitors", label: "Конкуренты", icon: Users },
 ] as const;
 
