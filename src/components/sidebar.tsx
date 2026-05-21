@@ -59,7 +59,7 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t p-3 text-[11px] text-muted-foreground">
-        <p>v0.1 · backend: localhost:8000</p>
+        <p>v0.1 · web :3001 · api :8000</p>
       </div>
     </aside>
   );
