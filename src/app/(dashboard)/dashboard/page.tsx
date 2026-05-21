@@ -14,6 +14,29 @@ import { Sparkles } from "lucide-react";
 import { tgBridge, type DashboardKpi, type CampaignSummary, type Me } from "@/lib/tg-bridge";
 import { AiChatMini } from "@/components/ai-chat-mini";
 import { Sparkline, fakeWeekCurve } from "@/components/sparkline";
+import { PlatformBadge } from "@/components/platform-badge";
+
+
+/** Time-of-day greeting in the user's language. */
+function greetingFor(lang: string | null | undefined, hour: number): string {
+  const l = lang ?? "ru";
+  if (l.startsWith("en")) {
+    if (hour < 5) return "Good night";
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  }
+  if (l.startsWith("et")) {
+    if (hour < 5) return "Head ööd";
+    if (hour < 12) return "Tere hommikust";
+    if (hour < 18) return "Tere päevast";
+    return "Tere õhtust";
+  }
+  if (hour < 5) return "Доброй ночи";
+  if (hour < 12) return "Доброе утро";
+  if (hour < 18) return "Добрый день";
+  return "Добрый вечер";
+}
 
 export default function DashboardPage() {
   const [kpi, setKpi] = useState<DashboardKpi | null>(null);
@@ -54,7 +77,8 @@ export default function DashboardPage() {
       <header className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="font-heading text-[28px] font-bold tracking-tight leading-tight">
-            Dashboard
+            {greetingFor(me?.language_code, new Date().getHours())}
+            {me?.first_name || me?.business_name ? `, ${me.first_name || me.business_name}` : ""}
           </h1>
           <p className="text-[13.5px] text-[var(--ink-mute)] mt-1">
             Сводка по активным кампаниям за последние 7 дней.
@@ -89,6 +113,7 @@ export default function DashboardPage() {
           value={kpi ? formatEur(kpi.spend_7d) : null}
           sub={kpi ? `${kpi.active_campaigns} активных · ${kpi.total_campaigns} всего` : "—"}
           loading={loading}
+          breakdown={breakdownByPlatform(campaigns, "spend")}
         />
         <KpiCard
           icon={Target}
@@ -96,6 +121,7 @@ export default function DashboardPage() {
           value={kpi ? String(kpi.leads_7d) : null}
           sub={kpi && kpi.leads_7d === 0 ? "ноль конверсий — проверь CTR" : "—"}
           loading={loading}
+          breakdown={breakdownByPlatform(campaigns, "conversions")}
         />
         <KpiCard
           icon={MousePointerClick}
@@ -150,10 +176,13 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2">
                         <StatusDot status={c.status} />
                         <span className="font-medium truncate">{c.name}</span>
+                        {(c.platform === "meta" || c.platform === "google") && (
+                          <PlatformBadge platform={c.platform} />
+                        )}
                         <AnomalyBadge anomalies={c.anomalies} />
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                        {c.ad_account_name} · {c.platform}
+                        {c.ad_account_name}
                       </div>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground shrink-0">
@@ -224,20 +253,43 @@ export default function DashboardPage() {
   );
 }
 
+/**
+ * Per-platform contribution to a metric (spend or conversions).
+ * Used by KpiCard to render the 4px breakdown bar at the bottom.
+ * Returns null when both platforms have zero — bar hides gracefully.
+ */
+function breakdownByPlatform(
+  campaigns: CampaignSummary[] | null,
+  key: "spend" | "conversions",
+): { meta: number; google: number; total: number } | null {
+  if (!campaigns) return null;
+  let meta = 0, google = 0;
+  for (const c of campaigns) {
+    const v = c[key] ?? 0;
+    if (c.platform === "meta") meta += v;
+    else if (c.platform === "google") google += v;
+  }
+  const total = meta + google;
+  if (total <= 0) return null;
+  return { meta, google, total };
+}
+
+
 function KpiCard({
-  icon: Icon, label, value, sub, loading,
+  icon: Icon, label, value, sub, loading, breakdown,
 }: {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   label: string;
   value: string | null;
   sub: string;
   loading: boolean;
+  breakdown?: { meta: number; google: number; total: number } | null;
 }) {
-  // Per design handoff §KPI Card:
+  // Per design handoff iter-2 §Dashboard KPI:
   //   - label: 12.5 Geist ink-mute
   //   - value: 26-30 Geist Mono 500, tabular-nums, -0.02em tracking
-  //   - delta/sub: 11 Geist Mono ink-subtle
-  //   - radius 14, padding 18/20
+  //   - sub: 11 Geist Mono ink-subtle
+  //   - 4px breakdown bar at bottom with Meta blue / Google blue + percent labels
   return (
     <Card className="rounded-[14px] border-[color:var(--border)] shadow-[0_1px_3px_rgba(31,29,26,0.04)]">
       <CardHeader className="pb-2 pt-4 px-5">
@@ -255,6 +307,29 @@ function KpiCard({
           </div>
         )}
         <p className="text-[11px] font-mono text-[var(--ink-subtle)] mt-2.5 tabular-nums">{sub}</p>
+
+        {breakdown && (
+          <div className="mt-3.5">
+            <div className="flex h-1 rounded-full overflow-hidden bg-[var(--border-soft)]">
+              <div
+                className="h-full"
+                style={{ width: `${(breakdown.meta / breakdown.total) * 100}%`, background: "var(--meta)" }}
+              />
+              <div
+                className="h-full"
+                style={{ width: `${(breakdown.google / breakdown.total) * 100}%`, background: "var(--google)" }}
+              />
+            </div>
+            <div className="flex justify-between mt-1.5 text-[10px] font-mono tabular-nums">
+              <span style={{ color: "var(--meta-ink)" }}>
+                {Math.round((breakdown.meta / breakdown.total) * 100)}% Meta
+              </span>
+              <span style={{ color: "var(--google-ink)" }}>
+                {Math.round((breakdown.google / breakdown.total) * 100)}% Google
+              </span>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
