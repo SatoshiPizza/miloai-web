@@ -36,12 +36,62 @@ export type PairStart = {
   expires_at: string;
 };
 
+export type CampaignAnomaly = {
+  severity: "info" | "warn" | "critical";
+  message: string;
+};
+
+export type CampaignSummary = {
+  id: string;
+  name: string;
+  status: string;
+  platform: "meta" | "google" | string;
+  ad_account_id: number;
+  ad_account_name: string;
+  objective: string;
+  daily_budget: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  cpa: number | null;
+  cpc: number | null;
+  ctr: number | null; // fraction 0-1
+  roas: number | null;
+  anomalies: CampaignAnomaly[];
+};
+
+export type CampaignTotals = {
+  spend: number;
+  clicks: number;
+  conversions: number;
+  campaigns_count: number;
+  active_count: number;
+  cpl: number | null;
+};
+
+export type CampaignsResponse = {
+  campaigns: CampaignSummary[];
+  totals: CampaignTotals;
+};
+
+export type DashboardKpi = {
+  spend_7d: number;
+  leads_7d: number;
+  cpl: number | null;
+  target_cpl: number | null;
+  active_campaigns: number;
+  total_campaigns: number;
+};
+
 export const tgBridge = {
   me: () => api.get<Me>("/api/web/me"),
   startPair: () => api.post<PairStart>("/api/web/pair/start"),
   listMessages: () => api.get<WebMessage[]>("/api/web/messages"),
   sendMessage: (text: string) =>
     api.post<WebMessage>("/api/web/messages", { text }),
+  campaigns: () => api.get<CampaignsResponse>("/api/web/campaigns"),
+  kpi: () => api.get<DashboardKpi>("/api/web/dashboard/kpi"),
 
   /**
    * Open a Server-Sent Events stream of incoming messages.
