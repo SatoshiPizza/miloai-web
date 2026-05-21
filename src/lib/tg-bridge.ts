@@ -84,6 +84,40 @@ export type DashboardKpi = {
   total_campaigns: number;
 };
 
+export type CampaignRecommendation = {
+  issue: string;
+  suggestion: string;
+  impact: string;
+};
+
+export type CampaignAdvice = {
+  health: "healthy" | "needs_attention" | "critical" | string;
+  summary: string;
+  recommendations: CampaignRecommendation[];
+};
+
+export type CampaignDetail = CampaignSummary & {
+  advice: CampaignAdvice | null;
+};
+
+export type ActionResult = {
+  ok: boolean;
+  detail: string | null;
+};
+
+export type LandingAuditItem = {
+  status: "ok" | "warn" | "fail" | string;
+  message: string;
+};
+
+export type LandingAuditReport = {
+  url: string;
+  score: number;
+  reachable: boolean;
+  page_size_kb: number;
+  items: LandingAuditItem[];
+};
+
 export const tgBridge = {
   me: () => api.get<Me>("/api/web/me"),
   startPair: () => api.post<PairStart>("/api/web/pair/start"),
@@ -91,6 +125,15 @@ export const tgBridge = {
   sendMessage: (text: string) =>
     api.post<WebMessage>("/api/web/messages", { text }),
   campaigns: () => api.get<CampaignsResponse>("/api/web/campaigns"),
+  campaign: (id: string) => api.get<CampaignDetail>(`/api/web/campaigns/${encodeURIComponent(id)}`),
+  pauseCampaign: (id: string) =>
+    api.post<ActionResult>(`/api/web/campaigns/${encodeURIComponent(id)}/pause`),
+  resumeCampaign: (id: string) =>
+    api.post<ActionResult>(`/api/web/campaigns/${encodeURIComponent(id)}/resume`),
+  adjustBudget: (id: string, body: { factor?: number; daily_eur?: number }) =>
+    api.post<ActionResult>(`/api/web/campaigns/${encodeURIComponent(id)}/budget`, body),
+  landingAudit: (id: string) =>
+    api.post<LandingAuditReport>(`/api/web/campaigns/${encodeURIComponent(id)}/landing-audit`),
   kpi: () => api.get<DashboardKpi>("/api/web/dashboard/kpi"),
 
   /**
