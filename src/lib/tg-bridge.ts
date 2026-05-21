@@ -118,12 +118,82 @@ export type LandingAuditReport = {
   items: LandingAuditItem[];
 };
 
+export type ServiceSummary = {
+  id: number;
+  name: string;
+  description: string | null;
+  price: number | null;
+  price_currency: string;
+  target_audience: string | null;
+  has_meta_creatives: boolean;
+  has_google_rsa: boolean;
+  has_landing: boolean;
+};
+
+export type AdAccountSummary = {
+  id: number;
+  platform: string;
+  platform_account_id: string;
+  account_name: string | null;
+  currency: string;
+};
+
+export type AccountsResponse = {
+  accounts: AdAccountSummary[];
+  has_meta: boolean;
+  has_google: boolean;
+};
+
+export type WizardAuditRequest = {
+  service_id: number;
+  daily_budget_eur: number;
+  platforms: { meta?: boolean; google?: boolean };
+};
+
+export type WizardAuditItem = {
+  status: "ok" | "warn" | "fail" | string;
+  message: string;
+  fix: string | null;
+  code: string | null;
+};
+
+export type WizardAuditResponse = {
+  score: number;
+  recommendation: "launch" | "fix_first" | "do_not_launch" | string;
+  items: WizardAuditItem[];
+  ai_summary: string | null;
+  ai_priority_fix: string | null;
+  ai_why_priority: string | null;
+  service_landing_url: string | null;
+};
+
+export type WizardLaunchRequest = WizardAuditRequest;
+
+export type WizardLaunchResult = {
+  platform: string;
+  ok: boolean;
+  campaign_id: string | null;
+  detail: string | null;
+  error: string | null;
+};
+
+export type WizardLaunchResponse = {
+  project_id: number | null;
+  results: WizardLaunchResult[];
+};
+
 export const tgBridge = {
   me: () => api.get<Me>("/api/web/me"),
   startPair: () => api.post<PairStart>("/api/web/pair/start"),
   listMessages: () => api.get<WebMessage[]>("/api/web/messages"),
   sendMessage: (text: string) =>
     api.post<WebMessage>("/api/web/messages", { text }),
+  services: () => api.get<ServiceSummary[]>("/api/web/services"),
+  adAccounts: () => api.get<AccountsResponse>("/api/web/ad-accounts"),
+  wizardAudit: (body: WizardAuditRequest) =>
+    api.post<WizardAuditResponse>("/api/web/campaigns/wizard/audit", body),
+  wizardLaunch: (body: WizardLaunchRequest) =>
+    api.post<WizardLaunchResponse>("/api/web/campaigns/wizard/launch", body),
   campaigns: () => api.get<CampaignsResponse>("/api/web/campaigns"),
   campaign: (id: string) => api.get<CampaignDetail>(`/api/web/campaigns/${encodeURIComponent(id)}`),
   pauseCampaign: (id: string) =>
