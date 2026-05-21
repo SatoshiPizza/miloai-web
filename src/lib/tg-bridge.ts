@@ -182,6 +182,46 @@ export type WizardLaunchResponse = {
   results: WizardLaunchResult[];
 };
 
+export type ChannelTopCampaign = {
+  id: string;
+  name: string;
+  status: string;
+  spend: number;
+  leads: number;
+  ctr: number | null;
+  cpa: number | null;
+};
+
+export type ChannelStats = {
+  spend: number;
+  clicks: number;
+  leads: number;
+  impressions: number;
+  ctr: number | null;
+  cpl: number | null;
+  roas: number | null;
+  campaigns_count: number;
+  active_count: number;
+  top_campaigns: ChannelTopCampaign[];
+};
+
+export type AiAllocationRecommendation = {
+  from_platform: string;
+  to_platform: string;
+  amount_eur: number;
+  reason: string;
+};
+
+export type ChannelsResponse = {
+  meta: ChannelStats;
+  google: ChannelStats;
+  total_spend: number;
+  ai_allocation: {
+    summary: string;
+    recommendation: AiAllocationRecommendation | null;
+  };
+};
+
 export const tgBridge = {
   me: () => api.get<Me>("/api/web/me"),
   startPair: () => api.post<PairStart>("/api/web/pair/start"),
@@ -196,6 +236,7 @@ export const tgBridge = {
     api.post<WizardLaunchResponse>("/api/web/campaigns/wizard/launch", body),
   campaigns: () => api.get<CampaignsResponse>("/api/web/campaigns"),
   campaign: (id: string) => api.get<CampaignDetail>(`/api/web/campaigns/${encodeURIComponent(id)}`),
+  channels: () => api.get<ChannelsResponse>("/api/web/channels"),
   metaOauthUrl: () => api.get<{ url: string }>("/api/web/oauth/meta/url"),
   googleOauthUrl: () => api.get<{ url: string }>("/api/web/oauth/google/url"),
   disconnectPlatform: (platform: "meta" | "google") =>
