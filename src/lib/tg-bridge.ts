@@ -196,6 +196,10 @@ export const tgBridge = {
     api.post<WizardLaunchResponse>("/api/web/campaigns/wizard/launch", body),
   campaigns: () => api.get<CampaignsResponse>("/api/web/campaigns"),
   campaign: (id: string) => api.get<CampaignDetail>(`/api/web/campaigns/${encodeURIComponent(id)}`),
+  metaOauthUrl: () => api.get<{ url: string }>("/api/web/oauth/meta/url"),
+  googleOauthUrl: () => api.get<{ url: string }>("/api/web/oauth/google/url"),
+  disconnectPlatform: (platform: "meta" | "google") =>
+    api.post<ActionResult>(`/api/web/accounts/${platform}/disconnect`),
   pauseCampaign: (id: string) =>
     api.post<ActionResult>(`/api/web/campaigns/${encodeURIComponent(id)}/pause`),
   resumeCampaign: (id: string) =>
