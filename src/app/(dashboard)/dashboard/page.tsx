@@ -10,6 +10,7 @@ import {
   TriangleAlert, Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import { tgBridge, type DashboardKpi, type CampaignSummary } from "@/lib/tg-bridge";
 
 export default function DashboardPage() {
@@ -45,10 +46,12 @@ export default function DashboardPage() {
 
   return (
     <div className="p-8 space-y-8 max-w-7xl">
-      <header className="flex items-start justify-between">
+      <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="font-heading text-[28px] font-bold tracking-tight leading-tight">
+            Dashboard
+          </h1>
+          <p className="text-[13.5px] text-[var(--ink-mute)] mt-1">
             Сводка по активным кампаниям за последние 7 дней.
           </p>
         </div>
@@ -58,6 +61,10 @@ export default function DashboardPage() {
           </Button>
         </Link>
       </header>
+
+      {/* AI Insights peach card — design highlight (handoff §Dashboard) */}
+      <AiInsightsCard kpi={kpi} loading={loading} />
+
 
       {error && (
         <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
@@ -192,29 +199,115 @@ export default function DashboardPage() {
 function KpiCard({
   icon: Icon, label, value, sub, loading,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   label: string;
   value: string | null;
   sub: string;
   loading: boolean;
 }) {
+  // Per design handoff §KPI Card:
+  //   - label: 12.5 Geist ink-mute
+  //   - value: 26-30 Geist Mono 500, tabular-nums, -0.02em tracking
+  //   - delta/sub: 11 Geist Mono ink-subtle
+  //   - radius 14, padding 18/20
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-          <Icon className="size-3.5" />
+    <Card className="rounded-[14px] border-[color:var(--border)] shadow-[0_1px_3px_rgba(31,29,26,0.04)]">
+      <CardHeader className="pb-2 pt-4 px-5">
+        <CardTitle className="text-[12.5px] font-normal text-[var(--ink-mute)] flex items-center gap-2 tracking-[-0.005em]">
+          <Icon className="size-[14px] text-[var(--ink-subtle)]" strokeWidth={1.6} />
           {label}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-5 pb-5">
         {loading ? (
-          <Skeleton className="h-7 w-20" />
+          <Skeleton className="h-8 w-24" />
         ) : (
-          <div className="text-2xl font-semibold tracking-tight">{value ?? "—"}</div>
+          <div className="font-mono text-[28px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">
+            {value ?? "—"}
+          </div>
         )}
-        <p className="text-xs text-muted-foreground mt-1">{sub}</p>
+        <p className="text-[11px] font-mono text-[var(--ink-subtle)] mt-2.5 tabular-nums">{sub}</p>
       </CardContent>
     </Card>
+  );
+}
+
+
+function AiInsightsCard({ kpi, loading }: { kpi: DashboardKpi | null; loading: boolean }) {
+  // Peach gradient panel from design handoff. Auto-generated insights based on
+  // KPI numbers — keeps the page feeling alive even before campaigns spend.
+  const insights = (() => {
+    if (loading || !kpi) return null;
+    const out: { kind: "ok" | "warn" | "info"; text: React.ReactNode }[] = [];
+    if (kpi.total_campaigns === 0) {
+      out.push({ kind: "info", text: <>Кампаний пока нет — <b>начни с «Новая кампания»</b> чтобы увидеть AI-инсайты по делу.</> });
+    } else if (kpi.active_campaigns === 0) {
+      out.push({ kind: "warn", text: <>Все {kpi.total_campaigns} кампаний на паузе. <b>Возобнови</b> хотя бы одну, иначе данные не накопятся.</> });
+    } else {
+      out.push({ kind: "ok", text: <><b>{kpi.active_campaigns}</b> кампаний активны, наблюдаю за метриками.</> });
+    }
+    if (kpi.spend_7d > 0 && kpi.leads_7d === 0) {
+      out.push({ kind: "warn", text: <>€{kpi.spend_7d.toFixed(0)} потрачено за 7 дней, <b>0 конверсий</b> — проблема в лендинге или таргете.</> });
+    }
+    if (kpi.cpl != null && kpi.target_cpl != null) {
+      if (kpi.cpl <= kpi.target_cpl) {
+        out.push({ kind: "ok", text: <>CPL <b>€{kpi.cpl.toFixed(0)}</b> ниже целевого €{kpi.target_cpl.toFixed(0)} — масштабируй.</> });
+      } else {
+        out.push({ kind: "warn", text: <>CPL <b>€{kpi.cpl.toFixed(0)}</b> выше цели €{kpi.target_cpl.toFixed(0)}. <b>Пересмотри</b> офферы.</> });
+      }
+    }
+    return out.slice(0, 3);
+  })();
+
+  return (
+    <div
+      className="relative rounded-[14px] border p-5"
+      style={{
+        background: "linear-gradient(135deg, var(--peach-wash) 0%, #F8E8D9 100%)",
+        borderColor: "#F5DDC8",
+      }}
+    >
+      <div className="flex items-start gap-4">
+        <div
+          className="size-[38px] rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm"
+          style={{ boxShadow: "0 4px 14px -4px rgba(232,149,108,0.4)" }}
+        >
+          <Sparkles className="size-[18px] text-[var(--peach)]" strokeWidth={1.6} />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--peach-deep)]">
+              AI · СЕГОДНЯ
+            </span>
+            <span className="size-1 rounded-full bg-[var(--peach-deep)]/40" />
+            <span className="text-[11px] text-[var(--peach-ink)]/60">обновлено только что</span>
+          </div>
+
+          {loading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-4/5" />
+              <Skeleton className="h-4 w-3/5" />
+            </div>
+          ) : insights && insights.length > 0 ? (
+            <ul className="space-y-1.5">
+              {insights.map((it, i) => (
+                <li key={i} className="flex items-start gap-2 text-[13.5px] leading-snug text-[var(--ink)]">
+                  <span className="mt-1 shrink-0">
+                    {it.kind === "ok" ? "✓" : it.kind === "warn" ? "⚠" : "💡"}
+                  </span>
+                  <span className="flex-1">{it.text}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[13.5px] text-[var(--peach-ink)]/80">
+              Подключи рекламные аккаунты — буду писать что менять.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
