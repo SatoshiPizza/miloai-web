@@ -118,6 +118,13 @@ export type LandingAuditReport = {
   items: LandingAuditItem[];
 };
 
+export type ServiceBannerPreview = {
+  angle: string;
+  headline: string;
+  subheadline: string;
+  color_scheme: string;
+};
+
 export type ServiceSummary = {
   id: number;
   name: string;
@@ -128,6 +135,9 @@ export type ServiceSummary = {
   has_meta_creatives: boolean;
   has_google_rsa: boolean;
   has_landing: boolean;
+  landing_url: string | null;
+  banner_previews: ServiceBannerPreview[];
+  sample_headlines: string[];
 };
 
 export type AdAccountSummary = {
