@@ -105,6 +105,14 @@ export type ActionResult = {
   detail: string | null;
 };
 
+export type LandingPublishResult = {
+  ok: boolean;
+  url: string | null;
+  slug: string | null;
+  backend: "local" | "cloudflare" | string;
+  detail: string | null;
+};
+
 export type LandingAuditItem = {
   status: "ok" | "warn" | "fail" | string;
   message: string;
@@ -259,6 +267,8 @@ export const tgBridge = {
     api.post<ActionResult>(`/api/web/campaigns/${encodeURIComponent(id)}/budget`, body),
   landingAudit: (id: string) =>
     api.post<LandingAuditReport>(`/api/web/campaigns/${encodeURIComponent(id)}/landing-audit`),
+  republishLanding: (serviceId: number) =>
+    api.post<LandingPublishResult>(`/api/web/services/${serviceId}/landing/republish`),
   kpi: () => api.get<DashboardKpi>("/api/web/dashboard/kpi"),
 
   /**

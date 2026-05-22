@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, Sparkles, Check, Settings as SettingsIcon, ExternalLink } from "lucide-react";
+import { Globe, Sparkles, Check, Settings as SettingsIcon, ExternalLink, Upload, Loader2 } from "lucide-react";
 import { tgBridge, type ServiceSummary } from "@/lib/tg-bridge";
 import { toast } from "sonner";
 
@@ -27,6 +27,7 @@ type LandingItem = {
 export default function LandingsPage() {
   const [services, setServices] = useState<ServiceSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [republishing, setRepublishing] = useState<number | null>(null);
 
   useEffect(() => {
     tgBridge.services()
@@ -37,6 +38,27 @@ export default function LandingsPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  async function republish(serviceId: number) {
+    setRepublishing(serviceId);
+    try {
+      const r = await tgBridge.republishLanding(serviceId);
+      if (!r.ok) {
+        toast.error(r.detail ?? "Не удалось перевыложить");
+        return;
+      }
+      toast.success(`Перевыложено · ${r.backend === "cloudflare" ? "Cloudflare KV" : "локально"}`);
+      // Refresh service list so URL updates immediately.
+      const fresh = await tgBridge.services();
+      setServices(fresh);
+    } catch (e: unknown) {
+      console.error(e);
+      const msg = e instanceof Error ? e.message : "Не удалось перевыложить";
+      toast.error(msg);
+    } finally {
+      setRepublishing(null);
+    }
+  }
 
   const items = useMemo(() => buildItems(services ?? []), [services]);
 
@@ -80,7 +102,14 @@ export default function LandingsPage() {
         <EmptyState />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
-          {items.map((it) => <LandingCard key={it.service.id} item={it} />)}
+          {items.map((it) => (
+            <LandingCard
+              key={it.service.id}
+              item={it}
+              busy={republishing === it.service.id}
+              onRepublish={() => republish(it.service.id)}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -92,8 +121,16 @@ export default function LandingsPage() {
 // Card
 // ═════════════════════════════════════════════════════════════════════════════
 
-function LandingCard({ item }: { item: LandingItem }) {
+function LandingCard({
+  item, busy, onRepublish,
+}: {
+  item: LandingItem;
+  busy: boolean;
+  onRepublish: () => void;
+}) {
   const businessName = item.service.name;
+  const isCloudflare = (item.url ?? "").includes(".workers.dev") || (item.url ?? "").includes("landings.");
+  const isLocal = (item.url ?? "").includes("localhost") || (item.url ?? "").startsWith("http://127");
   return (
     <div className="rounded-[14px] border border-[var(--border)] bg-card overflow-hidden flex flex-col">
       {/* Preview area */}
@@ -170,8 +207,23 @@ function LandingCard({ item }: { item: LandingItem }) {
       <div className="px-4 py-3.5 flex flex-col gap-2.5">
         <div className="flex items-center gap-2.5">
           <div className="flex-1 min-w-0">
-            <div className="text-[14px] font-semibold text-[var(--ink)] truncate">
-              {item.service.name}
+            <div className="flex items-center gap-2">
+              <div className="text-[14px] font-semibold text-[var(--ink)] truncate">
+                {item.service.name}
+              </div>
+              {item.status === "published" && (isLocal || isCloudflare) && (
+                <span
+                  className="px-1.5 py-px rounded font-mono text-[9.5px] font-semibold uppercase tracking-[0.04em] shrink-0"
+                  style={
+                    isCloudflare
+                      ? { background: "var(--meta-soft)", color: "var(--meta-ink)" }
+                      : { background: "var(--card-soft)", color: "var(--ink-mute)" }
+                  }
+                  title={isCloudflare ? "Раздаётся через Cloudflare Workers KV" : "Раздаётся локально из FastAPI"}
+                >
+                  {isCloudflare ? "CF KV" : "LOCAL"}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--ink-subtle)] mt-0.5">
               <Globe className="size-[10px]" />
@@ -181,7 +233,7 @@ function LandingCard({ item }: { item: LandingItem }) {
           {item.status === "published" && <ScoreBadge score={8} />}
         </div>
 
-        <div className="flex gap-1.5 mt-1">
+        <div className="flex gap-1.5 mt-1 flex-wrap">
           {item.status === "published" && item.url ? (
             <a
               href={item.url}
@@ -194,11 +246,24 @@ function LandingCard({ item }: { item: LandingItem }) {
             </a>
           ) : (
             <button
-              disabled
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] text-[11.5px] font-medium text-[var(--ink)] bg-[var(--card-soft)] border border-[var(--border)] disabled:opacity-50"
+              onClick={onRepublish}
+              disabled={busy || item.status === "none"}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] text-[11.5px] font-medium text-[var(--ink)] bg-[var(--card-soft)] border border-[var(--border)] hover:bg-[var(--background)] transition-colors disabled:opacity-50"
+              title={item.status === "none" ? "HTML ещё не сгенерирован — пройди визард" : "Опубликовать через активный backend"}
             >
-              <Globe className="size-[11px] text-[var(--ink-mute)]" />
+              {busy ? <Loader2 className="size-[11px] animate-spin" /> : <Globe className="size-[11px] text-[var(--ink-mute)]" />}
               {item.status === "draft" ? "Опубликовать" : "Создать"}
+            </button>
+          )}
+          {item.status === "published" && (
+            <button
+              onClick={onRepublish}
+              disabled={busy}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] text-[11.5px] font-medium text-[var(--ink)] bg-[var(--card-soft)] border border-[var(--border)] hover:bg-[var(--background)] transition-colors disabled:opacity-50"
+              title="Перевыложить через активный backend (например после переключения на Cloudflare)"
+            >
+              {busy ? <Loader2 className="size-[11px] animate-spin" /> : <Upload className="size-[11px] text-[var(--ink-mute)]" />}
+              Перевыложить
             </button>
           )}
           <button
