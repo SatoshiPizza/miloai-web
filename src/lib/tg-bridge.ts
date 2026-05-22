@@ -113,6 +113,50 @@ export type LandingPublishResult = {
   detail: string | null;
 };
 
+export type LeadStatus = "new" | "contacted" | "won" | "lost";
+export type LeadPlatform = "meta" | "google" | "manual";
+
+export type Lead = {
+  id: number;
+  user_id: number;
+  platform: LeadPlatform | string;
+  platform_lead_id: string | null;
+  form_id: string | null;
+  platform_campaign_id: string | null;
+  service_id: number | null;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  status: LeadStatus | string;
+  ai_response: string | null;
+  notes: string | null;
+  value: number | null;
+  reason: string | null;
+  created_at: string;
+  contacted_at: string | null;
+  closed_at: string | null;
+};
+
+/** SSE event envelope from /api/web/leads/stream. */
+export type LeadStreamEvent =
+  | (Lead & { event: "created" | "updated" })
+  | { event: "heartbeat" };
+
+export type LeadUpdate = {
+  status?: LeadStatus;
+  notes?: string;
+  value?: number;
+  reason?: string;
+};
+
+export type LeadCreateManual = {
+  name?: string;
+  phone?: string;
+  email?: string;
+  service_id?: number;
+  notes?: string;
+};
+
 export type LandingAuditItem = {
   status: "ok" | "warn" | "fail" | string;
   message: string;
@@ -269,6 +313,31 @@ export const tgBridge = {
     api.post<LandingAuditReport>(`/api/web/campaigns/${encodeURIComponent(id)}/landing-audit`),
   republishLanding: (serviceId: number) =>
     api.post<LandingPublishResult>(`/api/web/services/${serviceId}/landing/republish`),
+
+  // ── Leads ─────────────────────────────────────────────
+  leads: () => api.get<Lead[]>("/api/web/leads"),
+  updateLead: (id: number, body: LeadUpdate) =>
+    api.patch<Lead>(`/api/web/leads/${id}`, body),
+  createManualLead: (body: LeadCreateManual) =>
+    api.post<Lead>("/api/web/leads/manual", body),
+
+  /** SSE for new + updated leads. Returns an EventSource; caller closes on unmount. */
+  openLeadsStream(onEvent: (ev: LeadStreamEvent) => void): EventSource {
+    const url = new URL(`${config.apiUrl}/api/web/leads/stream`);
+    if (config.devUserId) {
+      url.searchParams.set("user_id", config.devUserId);
+    }
+    const es = new EventSource(url.toString(), { withCredentials: false });
+    es.addEventListener("lead", (ev) => {
+      try {
+        const data = JSON.parse((ev as MessageEvent).data) as LeadStreamEvent;
+        onEvent(data);
+      } catch (e) {
+        console.warn("Leads SSE parse error", e);
+      }
+    });
+    return es;
+  },
   kpi: () => api.get<DashboardKpi>("/api/web/dashboard/kpi"),
 
   /**
