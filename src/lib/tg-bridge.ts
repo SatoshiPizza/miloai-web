@@ -157,6 +157,15 @@ export type LeadCreateManual = {
   notes?: string;
 };
 
+export type BillingStatus = {
+  plan: "starter" | "pro" | "growth" | "agency" | string;
+  status: "trial" | "active" | "expired" | "cancelled" | string;
+  current_period_end: string | null;
+  has_payment_method: boolean;
+};
+
+export type BillingTier = "pro" | "growth";
+
 export type LandingAuditItem = {
   status: "ok" | "warn" | "fail" | string;
   message: string;
@@ -320,6 +329,12 @@ export const tgBridge = {
     api.patch<Lead>(`/api/web/leads/${id}`, body),
   createManualLead: (body: LeadCreateManual) =>
     api.post<Lead>("/api/web/leads/manual", body),
+
+  // ── Billing ───────────────────────────────────────────
+  billingStatus: () => api.get<BillingStatus>("/api/web/billing/status"),
+  billingCheckout: (tier: BillingTier) =>
+    api.post<{ url: string }>("/api/web/billing/checkout", { tier }),
+  billingPortal: () => api.post<{ url: string }>("/api/web/billing/portal"),
 
   /** SSE for new + updated leads. Returns an EventSource; caller closes on unmount. */
   openLeadsStream(onEvent: (ev: LeadStreamEvent) => void): EventSource {

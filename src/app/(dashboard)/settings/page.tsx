@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Settings as SettingsIcon, Sparkles, ExternalLink } from "lucide-react";
-import { tgBridge, type Me, type DashboardKpi } from "@/lib/tg-bridge";
+import { Settings as SettingsIcon, Sparkles, ExternalLink, Check, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  tgBridge,
+  type Me,
+  type DashboardKpi,
+  type BillingStatus,
+  type BillingTier,
+} from "@/lib/tg-bridge";
 
 /**
  * Settings — design handoff iter-2 §screen-extras SETTINGS.
@@ -36,6 +43,28 @@ export default function SettingsPage() {
         setKpi(k);
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  // Stripe Checkout redirects back with ?billing=success|cancel.
+  // We flash a toast, force-select the Billing tab, and let BillingTab
+  // poll /billing/status until it flips to active.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const billing = params.get("billing");
+    if (billing === "success") {
+      setActive("billing");
+      toast.success("Платёж принят — Stripe подтверждает подписку…");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("billing");
+      url.searchParams.delete("session_id");
+      window.history.replaceState({}, "", url.toString());
+    } else if (billing === "cancel") {
+      setActive("billing");
+      toast.info("Оплата отменена");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("billing");
+      window.history.replaceState({}, "", url.toString());
+    }
   }, []);
 
   return (
@@ -156,43 +185,255 @@ function GoalsTab({ kpi, loading }: { kpi: DashboardKpi | null; loading: boolean
   );
 }
 
+const TIERS: { key: BillingTier | "starter"; name: string; price: string; period: string; features: string[]; cta: string }[] = [
+  {
+    key: "starter",
+    name: "Starter",
+    price: "€0",
+    period: "beta",
+    features: ["1 ад-аккаунт", "Telegram-bridge", "Бета-функции", "AI 10 запр/день"],
+    cta: "Текущий план",
+  },
+  {
+    key: "pro",
+    name: "Pro",
+    price: "€49",
+    period: "в месяц",
+    features: ["5 ад-аккаунтов", "Meta + Google", "Lead Inbox", "AI 50 запр/день", "Stripe Portal"],
+    cta: "Перейти на Pro",
+  },
+  {
+    key: "growth",
+    name: "Growth",
+    price: "€149",
+    period: "в месяц",
+    features: ["Всё из Pro", "Безлимитные аккаунты", "AI 200 запр/день", "Приоритет в очереди", "Прямая поддержка"],
+    cta: "Перейти на Growth",
+  },
+];
+
 function BillingTab() {
+  const [status, setStatus] = useState<BillingStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState<BillingTier | "portal" | null>(null);
+
+  const load = async () => {
+    try {
+      const s = await tgBridge.billingStatus();
+      setStatus(s);
+      return s;
+    } catch (e) {
+      console.error(e);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  // After Stripe Checkout success, poll until the webhook flips status to active.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    // Only relevant on first mount when /settings was loaded with the success flag.
+    // Even though SettingsPage strips the flag, we still want to poll because
+    // the flag was present this render.
+    if (params.get("billing") !== "success" && !document.referrer.includes("stripe.com")) {
+      // Skip polling — but still do a single refresh in case the user reloaded.
+    }
+    let cancelled = false;
+    let tries = 0;
+    const tick = async () => {
+      if (cancelled || tries > 12) return;
+      tries += 1;
+      const s = await load();
+      if (s?.status === "active") return;
+      setTimeout(tick, 2500);
+    };
+    setTimeout(tick, 1500);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function startCheckout(tier: BillingTier) {
+    setPending(tier);
+    try {
+      const { url } = await tgBridge.billingCheckout(tier);
+      window.location.assign(url);
+    } catch (e: unknown) {
+      console.error(e);
+      const msg = e instanceof Error ? e.message : "Не удалось открыть Checkout";
+      toast.error(msg);
+      setPending(null);
+    }
+  }
+
+  async function openPortal() {
+    setPending("portal");
+    try {
+      const { url } = await tgBridge.billingPortal();
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: unknown) {
+      console.error(e);
+      const msg = e instanceof Error ? e.message : "Portal недоступен";
+      toast.error(msg);
+    } finally {
+      setPending(null);
+    }
+  }
+
+  const currentPlan = status?.plan ?? "starter";
+  const isActive = status?.status === "active";
+
   return (
-    <SettingsBlock title="Тариф & биллинг" subtitle="">
-      <div
-        className="flex flex-col md:flex-row md:items-center gap-3.5 p-4 rounded-[11px] border"
-        style={{ background: "linear-gradient(135deg, #FCF1E8 0%, #F8E8D9 100%)", borderColor: "#F5DDC8" }}
-      >
+    <>
+      {/* Status hero */}
+      <SettingsBlock title="Тариф & биллинг" subtitle="">
         <div
-          className="px-2.5 py-1 rounded-full font-mono text-[10px] font-bold uppercase shrink-0"
-          style={{ background: "#fff", color: "var(--peach-deep)", letterSpacing: "0.05em" }}
+          className="flex flex-col md:flex-row md:items-center gap-3.5 p-4 rounded-[11px] border"
+          style={{ background: "linear-gradient(135deg, #FCF1E8 0%, #F8E8D9 100%)", borderColor: "#F5DDC8" }}
         >
-          FREE
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[14px] font-semibold tracking-[-0.005em] text-[var(--ink)]">
-            Бета-доступ
+          <div
+            className="px-2.5 py-1 rounded-full font-mono text-[10px] font-bold uppercase shrink-0"
+            style={{ background: "#fff", color: "var(--peach-deep)", letterSpacing: "0.05em" }}
+          >
+            {currentPlan.toUpperCase()}
           </div>
-          <div className="text-[12px] text-[var(--ink-mute)] mt-0.5 leading-relaxed">
-            Без лимитов в beta · Meta + Google · Telegram-bridge · до 10 кампаний
+          <div className="flex-1 min-w-0">
+            {loading ? (
+              <Skeleton className="h-5 w-40" />
+            ) : (
+              <>
+                <div className="text-[14px] font-semibold tracking-[-0.005em] text-[var(--ink)]">
+                  {labelForPlan(currentPlan)}
+                </div>
+                <div className="text-[12px] text-[var(--ink-mute)] mt-0.5 leading-relaxed">
+                  Статус: <b style={{ color: isActive ? "var(--sage)" : "var(--ink)" }}>{labelForStatus(status?.status)}</b>
+                  {status?.current_period_end && (
+                    <>{" · следующее списание "}{formatDate(status.current_period_end)}</>
+                  )}
+                </div>
+              </>
+            )}
           </div>
+          {status?.has_payment_method ? (
+            <button
+              onClick={openPortal}
+              disabled={pending === "portal"}
+              className="px-3 py-1.5 rounded-md text-[12px] font-medium border bg-white disabled:opacity-70 inline-flex items-center gap-1.5"
+              style={{ color: "var(--peach-deep)", borderColor: "var(--peach-soft)" }}
+            >
+              {pending === "portal" ? <Loader2 className="size-3 animate-spin" /> : <ExternalLink className="size-3" />}
+              Stripe Portal
+            </button>
+          ) : null}
         </div>
-        <div className="font-mono text-[11.5px] text-[var(--ink-mute)] text-left md:text-right">
-          платный тариф<br />
-          скоро
+      </SettingsBlock>
+
+      {/* Tier picker */}
+      <SettingsBlock title="Выбрать тариф" subtitle="Оплата через Stripe — отменить можно в любой момент через Portal">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {TIERS.map((t) => {
+            const isCurrent = currentPlan === t.key;
+            const isUpgradable = t.key !== "starter";
+            const isBusy = pending === t.key;
+            return (
+              <div
+                key={t.key}
+                className="rounded-[11px] border p-4 flex flex-col gap-2.5"
+                style={{
+                  background: isCurrent ? "var(--peach-wash)" : "var(--card-soft)",
+                  borderColor: isCurrent ? "var(--peach-soft)" : "var(--border)",
+                }}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="font-heading text-[16px] font-bold tracking-[-0.015em]">{t.name}</div>
+                  {isCurrent && (
+                    <span
+                      className="px-1.5 py-0.5 rounded font-mono text-[9.5px] font-bold uppercase"
+                      style={{ background: "var(--peach)", color: "#fff", letterSpacing: "0.04em" }}
+                    >
+                      текущий
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-mono text-[24px] font-semibold tabular-nums tracking-[-0.02em]">{t.price}</span>
+                  <span className="font-mono text-[11px] text-[var(--ink-subtle)]">{t.period}</span>
+                </div>
+                <ul className="flex flex-col gap-1 mt-1">
+                  {t.features.map((f) => (
+                    <li key={f} className="flex items-start gap-1.5 text-[12.5px] text-[var(--ink)] tracking-[-0.005em]">
+                      <Check className="size-3 mt-1 shrink-0" style={{ color: "var(--sage)" }} strokeWidth={2.4} />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-auto pt-2">
+                  {isCurrent ? (
+                    <button
+                      disabled
+                      className="w-full px-3 py-1.5 rounded-md text-[12px] font-medium border bg-white text-[var(--ink-mute)] disabled:opacity-70"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      Активен
+                    </button>
+                  ) : isUpgradable ? (
+                    <button
+                      onClick={() => startCheckout(t.key as BillingTier)}
+                      disabled={isBusy}
+                      className="w-full px-3 py-1.5 rounded-md text-[12px] font-medium text-white disabled:opacity-70 inline-flex items-center justify-center gap-1.5"
+                      style={{ background: "var(--peach)" }}
+                    >
+                      {isBusy && <Loader2 className="size-3 animate-spin" />}
+                      {t.cta}
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="w-full px-3 py-1.5 rounded-md text-[12px] font-medium border bg-white text-[var(--ink-mute)] disabled:opacity-70"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      {t.cta}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
-        <button
-          disabled
-          className="px-3 py-1.5 rounded-md text-[12px] font-medium border bg-white disabled:opacity-70 inline-flex items-center gap-1.5"
-          style={{ color: "var(--peach-deep)", borderColor: "var(--peach-soft)" }}
-          title="Скоро: Stripe Portal"
-        >
-          Stripe Portal
-          <ExternalLink className="size-3" />
-        </button>
-      </div>
-    </SettingsBlock>
+        <p className="text-[11.5px] text-[var(--ink-subtle)] italic mt-1">
+          Pro и Growth доступны если backend получил <code>STRIPE_PRICE_PRO</code> / <code>STRIPE_PRICE_GROWTH</code>. Иначе кнопка вернёт ошибку.
+        </p>
+      </SettingsBlock>
+    </>
   );
+}
+
+function labelForPlan(plan: string): string {
+  if (plan === "pro") return "Pro";
+  if (plan === "growth" || plan === "agency") return "Growth";
+  return "Бета-доступ";
+}
+
+function labelForStatus(s: string | undefined): string {
+  if (s === "active") return "активна";
+  if (s === "trial") return "trial";
+  if (s === "expired") return "истёк срок";
+  if (s === "cancelled") return "отменена";
+  return s || "—";
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    return iso;
+  }
 }
 
 function PlaceholderBlock({ title, body }: { title: string; body: string }) {
