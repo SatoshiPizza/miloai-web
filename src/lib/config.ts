@@ -5,14 +5,20 @@
  * client component leaks to the browser bundle.
  */
 
+// Resolve the API URL. Empty string falls through to the fallback (the `??`
+// operator only catches null/undefined, so empty env vars would otherwise
+// produce a relative URL like "/api/web/me" against the hosting domain).
+function resolveApiUrl(): string {
+  const v = process.env.NEXT_PUBLIC_API_URL;
+  if (v && v.trim()) return v.trim();
+  return "http://localhost:8000";
+}
+
 export const config = {
-  apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000",
+  apiUrl: resolveApiUrl(),
   telegramBotUsername:
-    process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "miloailevbot",
-  // DEV-ONLY: until NextAuth is wired, every API call goes out with
-  // x-user-id pointing at a real `users.id`. Set in .env.local.
-  devUserId: process.env.NEXT_PUBLIC_DEV_USER_ID ?? "",
-  // Public — safe to read in client components.
-  pusherKey: process.env.NEXT_PUBLIC_PUSHER_KEY ?? "",
-  pusherCluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER ?? "eu",
+    process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "miloailevbot",
+  devUserId: process.env.NEXT_PUBLIC_DEV_USER_ID || "",
+  pusherKey: process.env.NEXT_PUBLIC_PUSHER_KEY || "",
+  pusherCluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "eu",
 } as const;
