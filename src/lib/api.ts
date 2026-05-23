@@ -10,6 +10,7 @@
  */
 
 import { config } from "@/lib/config";
+import { getSessionToken } from "@/lib/session";
 
 type FetchOpts = RequestInit & {
   /** Optional bearer token (NextAuth session) attached as `Authorization`. */
@@ -39,11 +40,15 @@ async function request<T>(path: string, opts: FetchOpts = {}): Promise<T> {
     // bypasses the interstitial. Harmless against a non-ngrok backend.
     "ngrok-skip-browser-warning": "true",
   };
-  if (token) {
-    finalHeaders["Authorization"] = `Bearer ${token}`;
+  // Auth precedence:
+  //   1. Explicit token passed in opts (rare; back-channel calls).
+  //   2. Session JWT from Telegram Login Widget (localStorage).
+  //   3. NEXT_PUBLIC_DEV_USER_ID shim — only used when neither of the above
+  //      exists. Lets local dev keep working without forcing login.
+  const sessionToken = token ?? getSessionToken();
+  if (sessionToken) {
+    finalHeaders["Authorization"] = `Bearer ${sessionToken}`;
   } else if (config.devUserId) {
-    // DEV: until NextAuth is wired, forward x-user-id. Backend's
-    // _current_user (app/api/web.py) reads this header.
     finalHeaders["x-user-id"] = config.devUserId;
   }
   if (headers) {

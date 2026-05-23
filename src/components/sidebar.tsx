@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutGrid, Rocket, FolderOpen, MessageCircle, Image as ImageIcon,
-  Globe, Inbox, BarChart3, TrendingUp, Users, Plug, Settings,
+  Globe, Inbox, BarChart3, TrendingUp, Users, Plug, Settings, LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { clearSession, getSessionUser } from "@/lib/session";
+import { useEffect, useState } from "react";
 
 /**
  * Sidebar nav per design handoff (README.md §0).
@@ -38,6 +40,14 @@ const BOTTOM_NAV = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [me, setMe] = useState<ReturnType<typeof getSessionUser> | null>(null);
+  useEffect(() => { setMe(getSessionUser()); }, [pathname]);
+
+  function logout() {
+    clearSession();
+    window.location.assign("/login");
+  }
+
   return (
     <aside
       className="hidden md:flex h-screen w-60 shrink-0 flex-col bg-sidebar border-r"
@@ -72,8 +82,25 @@ export function Sidebar() {
         ))}
       </nav>
 
+      {me && (
+        <button
+          onClick={logout}
+          className="mx-2 mb-1 flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-[var(--ink-mute)] hover:bg-[var(--card-soft)]/60 hover:text-foreground transition-colors"
+          title="Завершить сессию"
+        >
+          <LogOut className="size-[15px]" strokeWidth={1.6} />
+          <div className="flex-1 min-w-0 text-left leading-tight">
+            <div className="truncate text-[13px] text-foreground">
+              {me.first_name || me.username || "Пользователь"}
+            </div>
+            <div className="truncate font-mono text-[10.5px] text-[var(--ink-subtle)]">
+              {me.username ? `@${me.username}` : `id ${me.user_id}`} · выйти
+            </div>
+          </div>
+        </button>
+      )}
       <div className="px-4 py-2 text-[10px] text-[var(--ink-subtle)] font-mono">
-        v0.1 · :3001 · api :8000
+        v0.1 · {process.env.NEXT_PUBLIC_API_URL ? "prod" : "dev"}
       </div>
     </aside>
   );
