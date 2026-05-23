@@ -33,6 +33,11 @@ async function request<T>(path: string, opts: FetchOpts = {}): Promise<T> {
   // type narrowing of HeadersInit.
   const finalHeaders: Record<string, string> = {
     "Content-Type": "application/json",
+    // When the backend is exposed via an ngrok free tunnel, ngrok normally
+    // shows an interstitial HTML warning to browser User-Agents — which
+    // poisons every fetch (HTML, not JSON). Sending this header (any value)
+    // bypasses the interstitial. Harmless against a non-ngrok backend.
+    "ngrok-skip-browser-warning": "true",
   };
   if (token) {
     finalHeaders["Authorization"] = `Bearer ${token}`;
