@@ -59,6 +59,42 @@ function LoginInner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Email signup form state
+  const [emailMode, setEmailMode] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailName, setEmailName] = useState("");
+
+  async function emailSubmit() {
+    if (!email.trim() || !email.includes("@")) {
+      setError("Введи валидный email");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.post<{
+        token: string; user_id: number; email: string; first_name: string | null;
+      }>("/api/auth/email-login", {
+        email: email.trim(),
+        first_name: emailName.trim() || null,
+      });
+      saveSession({
+        token: res.token,
+        user_id: res.user_id,
+        telegram_id: 0,
+        first_name: res.first_name,
+        username: null,
+        email: res.email,
+      });
+      router.replace(next);
+    } catch (e: unknown) {
+      console.error(e);
+      const msg = e instanceof Error ? e.message : "Не удалось войти";
+      setError(msg);
+      setBusy(false);
+    }
+  }
+
   // If already logged in, skip the form.
   useEffect(() => {
     if (getSessionToken()) {
@@ -136,9 +172,59 @@ function LoginInner() {
             Авторизуйся через свой Telegram-аккаунт — никаких паролей. После входа подключишь Meta/Google рекламные кабинеты в одном клике.
           </p>
 
-          <div ref={widgetSlot} className="flex justify-center" />
+          {!emailMode && <div ref={widgetSlot} className="flex justify-center" />}
 
-          {busy && (
+          {emailMode && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-[12px] font-medium text-[var(--ink-mute)] block mb-1">Email</label>
+                <input
+                  type="email"
+                  autoFocus
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && emailSubmit()}
+                  placeholder="you@example.com"
+                  className="w-full px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--card-soft)] text-[14px] text-[var(--ink)] outline-none focus:border-[var(--peach)]"
+                />
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-[var(--ink-mute)] block mb-1">Имя (опционально)</label>
+                <input
+                  type="text"
+                  value={emailName}
+                  onChange={(e) => setEmailName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && emailSubmit()}
+                  placeholder="Как тебя называть"
+                  className="w-full px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--card-soft)] text-[14px] text-[var(--ink)] outline-none focus:border-[var(--peach)]"
+                />
+              </div>
+              <button
+                onClick={emailSubmit}
+                disabled={busy || !email.trim()}
+                className="w-full py-2.5 rounded-md text-[14px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                style={{ background: "var(--peach)" }}
+              >
+                {busy && <Loader2 className="size-4 animate-spin" />}
+                Войти / создать аккаунт
+              </button>
+            </div>
+          )}
+
+          <div className="my-4 flex items-center gap-2.5 text-[11px] text-[var(--ink-subtle)]">
+            <div className="flex-1 h-px bg-[var(--border)]" />
+            или
+            <div className="flex-1 h-px bg-[var(--border)]" />
+          </div>
+
+          <button
+            onClick={() => { setEmailMode((v) => !v); setError(null); }}
+            className="w-full py-2 rounded-md text-[13px] font-medium border border-[var(--border)] bg-card text-[var(--ink)] hover:bg-[var(--card-soft)] transition-colors"
+          >
+            {emailMode ? "Войти через Telegram" : "Войти через email"}
+          </button>
+
+          {busy && !emailMode && (
             <div className="flex items-center justify-center gap-2 mt-4 text-[13px] text-[var(--ink-mute)]">
               <Loader2 className="size-4 animate-spin" />
               Создаём сессию…

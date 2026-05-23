@@ -91,10 +91,10 @@ export function Sidebar() {
           <LogOut className="size-[15px]" strokeWidth={1.6} />
           <div className="flex-1 min-w-0 text-left leading-tight">
             <div className="truncate text-[13px] text-foreground">
-              {me.first_name || me.username || "Пользователь"}
+              {me.first_name || me.username || me.email || "Пользователь"}
             </div>
             <div className="truncate font-mono text-[10.5px] text-[var(--ink-subtle)]">
-              {me.username ? `@${me.username}` : `id ${me.user_id}`} · выйти
+              {me.username ? `@${me.username}` : (me.email ?? `id ${me.user_id}`)} · выйти
             </div>
           </div>
         </button>

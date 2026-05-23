@@ -21,6 +21,7 @@ export type SessionUser = {
   telegram_id: number;
   first_name: string | null;
   username: string | null;
+  email?: string | null;
 };
 
 export function getSessionToken(): string | null {
@@ -66,6 +67,7 @@ export function saveSession(payload: {
   telegram_id: number;
   first_name: string | null;
   username: string | null;
+  email?: string | null;
 }): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(TOKEN_KEY, payload.token);
@@ -76,6 +78,7 @@ export function saveSession(payload: {
       telegram_id: payload.telegram_id,
       first_name: payload.first_name,
       username: payload.username,
+      email: payload.email ?? null,
     } satisfies SessionUser)
   );
 }
