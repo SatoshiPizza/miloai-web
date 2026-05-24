@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import {
   Copy, Check, ExternalLink, Loader2, Unplug, RotateCw, Settings as SettingsIcon,
-  UserPlus, Sparkles,
+  UserPlus, Sparkles, Send,
 } from "lucide-react";
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
 import { tgBridge, type Me, type PairStart, type AccountsResponse } from "@/lib/tg-bridge";
@@ -105,6 +108,9 @@ export default function AccountsPage() {
     try {
       const result = await tgBridge.startPair();
       setPair(result);
+      // Auto-open Telegram in a new tab so user only has to tap START.
+      // window.open requires a user-gesture context, which we have (button click).
+      window.open(result.deep_link, "_blank", "noopener,noreferrer");
     } catch (e) {
       toast.error("Не удалось создать pair-токен. Backend на :8000?");
       console.error(e);
@@ -181,6 +187,48 @@ export default function AccountsPage() {
         </div>
       </div>
       <TeamCard me={me} />
+
+      {/* TG pairing modal — opens after startPair() generates a token and
+          auto-opens t.me/bot?start=... in a new tab. Polling /me elsewhere
+          flips has_telegram_paired=true → modal auto-closes on next render. */}
+      <Dialog open={!!pair && !(me?.has_telegram_paired)} onOpenChange={(o) => { if (!o) setPair(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Подключение Telegram</DialogTitle>
+            <DialogDescription>
+              В соседней вкладке открылся бот <b>@miloailevbot</b>. Нажми внизу кнопку <b>START</b> — и я тут увижу.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center py-4">
+            <div className="size-16 rounded-full flex items-center justify-center" style={{ background: "var(--peach-wash)" }}>
+              <Loader2 className="size-7 animate-spin" style={{ color: "var(--peach-deep)" } as React.CSSProperties} />
+            </div>
+          </div>
+          <p className="text-center text-[12.5px] text-[var(--ink-mute)]">
+            Жду подтверждения…
+          </p>
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => pair && window.open(pair.deep_link, "_blank", "noopener,noreferrer")}
+              className="flex-1 py-2 rounded-md text-[12.5px] font-medium text-white"
+              style={{ background: "var(--peach)" }}
+            >
+              <ExternalLink className="size-3.5 inline mr-1.5" />
+              Открыть бота ещё раз
+            </button>
+            <button
+              onClick={() => { if (pair) { navigator.clipboard.writeText(pair.deep_link); toast.success("Ссылка скопирована"); }}}
+              className="px-3 py-2 rounded-md text-[12.5px] font-medium border border-[var(--border)] hover:bg-[var(--card-soft)] transition-colors"
+              title="Скопировать ссылку (для отправки себе в TG)"
+            >
+              <Copy className="size-3.5" />
+            </button>
+          </div>
+          <p className="text-[11px] text-[var(--ink-subtle)] mt-2 leading-relaxed">
+            Если ничего не происходит: открой <code>@miloailevbot</code> в Telegram вручную и пошли команду <code>/start</code>. Ссылка живёт 24 часа.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -255,44 +303,13 @@ function TelegramHero({
             Голосовые с телефона → автоматически распознаются и применяются. Каждое действие в браузере — летит ответом в чат.
           </p>
 
-          {/* Pairing UI */}
+          {/* Pairing UI — either status text or the "Connect" button */}
           {paired ? (
             <div className="mt-3 text-[12.5px] text-[var(--peach-ink)]/75">
               Открой Telegram → бот. Сообщения и голосовые увидишь в{" "}
               <a href="/chat" className="underline font-medium" style={{ color: "var(--peach-deep)" }}>
                 /chat
               </a>.
-            </div>
-          ) : pair ? (
-            <div className="mt-3 space-y-2">
-              <div className="text-[11.5px] text-[var(--peach-ink)]/75">
-                Открой эту ссылку с телефона (или скопируй и пришли себе в TG):
-              </div>
-              <div className="flex gap-1.5">
-                <code
-                  className="flex-1 px-3 py-2 rounded text-[11px] break-all"
-                  style={{ background: "rgba(255,255,255,0.7)", color: "var(--ink)" }}
-                >
-                  {pair.deep_link}
-                </code>
-                <button
-                  onClick={onCopyLink}
-                  className="size-9 rounded-md border border-[var(--peach-soft)] bg-white flex items-center justify-center hover:bg-[var(--peach-wash)] transition-colors"
-                  aria-label="Copy"
-                >
-                  {copied ? <Check className="size-4 text-[var(--sage)]" /> : <Copy className="size-4 text-[var(--peach-deep)]" />}
-                </button>
-                <button
-                  onClick={() => window.open(pair.deep_link, "_blank", "noopener,noreferrer")}
-                  className="size-9 rounded-md border border-[var(--peach-soft)] bg-white flex items-center justify-center hover:bg-[var(--peach-wash)] transition-colors"
-                  aria-label="Open"
-                >
-                  <ExternalLink className="size-4 text-[var(--peach-deep)]" />
-                </button>
-              </div>
-              <div className="text-[11px] text-[var(--peach-ink)]/60">
-                Ссылка живёт 24ч. Жду подключения…
-              </div>
             </div>
           ) : (
             <Button
@@ -301,8 +318,8 @@ function TelegramHero({
               className="mt-3.5"
               size="sm"
             >
-              <Sparkles className="size-3.5 mr-1.5" />
-              {generating ? "Генерю токен..." : "Подключить Telegram"}
+              {generating ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <Send className="size-3.5 mr-1.5" />}
+              {generating ? "Открываем Telegram…" : "Подключить Telegram"}
             </Button>
           )}
         </div>
