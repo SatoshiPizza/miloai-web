@@ -361,47 +361,73 @@ export const tgBridge = {
     api.post<{ url: string }>("/api/web/billing/checkout", { tier }),
   billingPortal: () => api.post<{ url: string }>("/api/web/billing/portal"),
 
-  /** SSE for new + updated leads. Returns an EventSource; caller closes on unmount. */
-  openLeadsStream(onEvent: (ev: LeadStreamEvent) => void): EventSource {
-    const url = new URL(`${config.apiUrl}/api/web/leads/stream`);
-    if (config.devUserId) {
-      url.searchParams.set("user_id", config.devUserId);
-    }
-    const es = new EventSource(url.toString(), { withCredentials: false });
-    es.addEventListener("lead", (ev) => {
+  /** Live leads — same polling fallback as openStream() (ngrok-free breaks SSE). */
+  openLeadsStream(onEvent: (ev: LeadStreamEvent) => void): { close: () => void } {
+    let lastId = 0;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = async () => {
+      if (cancelled) return;
       try {
-        const data = JSON.parse((ev as MessageEvent).data) as LeadStreamEvent;
-        onEvent(data);
-      } catch (e) {
-        console.warn("Leads SSE parse error", e);
+        const list = await api.get<Lead[]>("/api/web/leads");
+        for (const lead of list) {
+          if (lead.id > lastId) {
+            onEvent({ ...(lead as Lead), event: "created" });
+            lastId = lead.id;
+          }
+        }
+      } catch {
+        /* swallow — retry next tick */
       }
-    });
-    return es;
+      if (!cancelled) timer = setTimeout(tick, 4000);
+    };
+    timer = setTimeout(tick, 50);
+    return {
+      close: () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+      },
+    };
   },
   kpi: () => api.get<DashboardKpi>("/api/web/dashboard/kpi"),
 
   /**
-   * Open a Server-Sent Events stream of incoming messages.
-   * Returns an EventSource — caller closes it on unmount.
+   * Open a live message stream for /chat. Returns a handle with close()
+   * for unmount cleanup, shaped like EventSource so existing callers don't
+   * need to change.
    *
-   * EventSource doesn't support custom headers (no Authorization, no
-   * x-user-id), so for dev we pass the user id as a query parameter and
-   * the backend route reads it. Update when JWT lands in cookies.
+   * Under the hood: polling — we tried SSE but EventSource can't set the
+   * `ngrok-skip-browser-warning` header, so on ngrok-free the stream just
+   * receives the interstitial HTML page instead of an event stream. When
+   * the backend moves off ngrok-free we can flip back to SSE.
    */
-  openStream(onMessage: (msg: WebMessage) => void): EventSource {
-    const url = new URL(`${config.apiUrl}/api/web/messages/stream`);
-    if (config.devUserId) {
-      url.searchParams.set("user_id", config.devUserId);
-    }
-    const es = new EventSource(url.toString(), { withCredentials: false });
-    es.addEventListener("message", (ev) => {
+  openStream(onMessage: (msg: WebMessage) => void): { close: () => void } {
+    let lastId = 0;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = async () => {
+      if (cancelled) return;
       try {
-        const data = JSON.parse((ev as MessageEvent).data) as WebMessage;
-        onMessage(data);
-      } catch (e) {
-        console.warn("SSE parse error", e);
+        const list = await api.get<WebMessage[]>("/api/web/messages");
+        for (const msg of list) {
+          if (msg.id > lastId) {
+            onMessage(msg);
+            lastId = msg.id;
+          }
+        }
+      } catch {
+        // network blip — next tick will retry; surface via console only.
       }
-    });
-    return es;
+      if (!cancelled) timer = setTimeout(tick, 3000);
+    };
+    // Kick off on next microtask so the caller's setState wiring is done.
+    timer = setTimeout(tick, 50);
+    return {
+      close: () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+      },
+    };
   },
 };
