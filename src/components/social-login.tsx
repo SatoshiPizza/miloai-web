@@ -70,6 +70,32 @@ export function GoogleLoginButton({
   onDone: () => void;
 }) {
   const slot = useRef<HTMLDivElement | null>(null);
+  // Stable callback ref — GIS rejects async functions (throws "Expression is
+  // of type asyncfunction, not function") so we wrap our async logic in a
+  // sync handler that spawns an async IIFE.
+  const handlerRef = useRef<(r: { credential: string }) => void>(() => {});
+  // Guard against double-init in StrictMode + on prop changes — GIS warns
+  // when initialize() is called multiple times and uses only the last
+  // instance, which strands earlier renderButton calls.
+  const initedRef = useRef(false);
+
+  useEffect(() => {
+    handlerRef.current = (r) => {
+      onStart();
+      (async () => {
+        try {
+          const out = await api.post<SocialLoginOut>(
+            "/api/auth/google-login",
+            { credential: r.credential }
+          );
+          await finishLogin(out, next, onDone);
+        } catch (e) {
+          console.error(e);
+          onError(e instanceof Error ? e.message : "Не удалось войти через Google");
+        }
+      })();
+    };
+  }, [next, onStart, onDone, onError]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
@@ -78,22 +104,15 @@ export function GoogleLoginButton({
     function init() {
       const gis = window.google?.accounts?.id;
       if (!gis || !slot.current) return;
-      gis.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: async (r) => {
-          onStart();
-          try {
-            const out = await api.post<SocialLoginOut>(
-              "/api/auth/google-login",
-              { credential: r.credential }
-            );
-            await finishLogin(out, next, onDone);
-          } catch (e) {
-            console.error(e);
-            onError(e instanceof Error ? e.message : "Не удалось войти через Google");
-          }
-        },
-      });
+      if (!initedRef.current) {
+        gis.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          // Plain sync callback — handlerRef forwards to the (always fresh)
+          // async impl above.
+          callback: (r: { credential: string }) => handlerRef.current(r),
+        });
+        initedRef.current = true;
+      }
       gis.renderButton(slot.current, {
         type: "standard",
         theme: "outline",
@@ -114,7 +133,9 @@ export function GoogleLoginButton({
     s.defer = true;
     s.onload = init;
     document.head.appendChild(s);
-  }, [next, onError, onStart, onDone]);
+    // No cleanup script removal — Google's SDK is global; removing it would
+    // break other consumers on the same page.
+  }, []);
 
   if (!GOOGLE_CLIENT_ID) {
     return null;
@@ -165,22 +186,28 @@ export function MetaLoginButton({
       return;
     }
     onStart();
+    // FB.login() expects a plain (non-async) callback — async callbacks can
+    // silently swallow the response in some SDK builds. Wrap our async logic
+    // in an IIFE inside a sync callback.
     fb.login(
-      async (resp) => {
+      (resp) => {
         if (!resp.authResponse) {
           onError("Логин отменён");
           return;
         }
-        try {
-          const out = await api.post<SocialLoginOut>(
-            "/api/auth/meta-login",
-            { access_token: resp.authResponse.accessToken }
-          );
-          await finishLogin(out, next, onDone);
-        } catch (e) {
-          console.error(e);
-          onError(e instanceof Error ? e.message : "Не удалось войти через Meta");
-        }
+        const accessToken = resp.authResponse.accessToken;
+        (async () => {
+          try {
+            const out = await api.post<SocialLoginOut>(
+              "/api/auth/meta-login",
+              { access_token: accessToken }
+            );
+            await finishLogin(out, next, onDone);
+          } catch (e) {
+            console.error(e);
+            onError(e instanceof Error ? e.message : "Не удалось войти через Meta");
+          }
+        })();
       },
       { scope: "email,public_profile" }
     );
