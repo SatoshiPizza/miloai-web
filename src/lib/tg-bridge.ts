@@ -166,6 +166,14 @@ export type BillingStatus = {
 
 export type BillingTier = "pro" | "growth";
 
+export type SocialLoginOut = {
+  token: string;
+  user_id: number;
+  first_name: string | null;
+  email: string | null;
+  avatar_url?: string | null;
+};
+
 export type LandingAuditItem = {
   status: "ok" | "warn" | "fail" | string;
   message: string;

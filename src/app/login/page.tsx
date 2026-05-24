@@ -6,6 +6,7 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { saveSession, getSessionToken } from "@/lib/session";
 import { config } from "@/lib/config";
+import { GoogleLoginButton, MetaLoginButton } from "@/components/social-login";
 
 /**
  * /login — Telegram Login Widget entry point.
@@ -172,7 +173,26 @@ function LoginInner() {
             Авторизуйся через свой Telegram-аккаунт — никаких паролей. После входа подключишь Meta/Google рекламные кабинеты в одном клике.
           </p>
 
-          {!emailMode && <div ref={widgetSlot} className="flex justify-center" />}
+          {!emailMode && (
+            <>
+              {/* Social — Google + Facebook (shown only when their NEXT_PUBLIC_* env is set) */}
+              <div className="flex flex-col gap-2.5 mb-3">
+                <GoogleLoginButton
+                  next={next}
+                  onStart={() => { setBusy(true); setError(null); }}
+                  onDone={() => setBusy(false)}
+                  onError={(m) => { setError(m); setBusy(false); }}
+                />
+                <MetaLoginButton
+                  next={next}
+                  onStart={() => { setBusy(true); setError(null); }}
+                  onDone={() => setBusy(false)}
+                  onError={(m) => { setError(m); setBusy(false); }}
+                />
+              </div>
+              <div ref={widgetSlot} className="flex justify-center" />
+            </>
+          )}
 
           {emailMode && (
             <div className="space-y-3">
