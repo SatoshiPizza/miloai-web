@@ -11,6 +11,7 @@ import {
   type BillingStatus,
   type BillingTier,
 } from "@/lib/tg-bridge";
+import { LinkedIdentitiesBlock } from "@/components/linked-identities";
 
 /**
  * Settings — design handoff iter-2 §screen-extras SETTINGS.
@@ -19,10 +20,11 @@ import {
  * Backend endpoints for editing not shipped yet — render read-only views.
  */
 
-type TabKey = "profile" | "goals" | "billing" | "team" | "api" | "notifications";
+type TabKey = "profile" | "logins" | "goals" | "billing" | "team" | "api" | "notifications";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "profile",       label: "Профиль" },
+  { key: "logins",        label: "Логин" },
   { key: "goals",         label: "Цели" },
   { key: "billing",       label: "Биллинг" },
   { key: "team",          label: "Команда" },
@@ -99,6 +101,7 @@ export default function SettingsPage() {
       {/* Body */}
       <div className="flex flex-col gap-[18px]">
         {active === "profile" && <ProfileTab me={me} loading={loading} />}
+        {active === "logins" && <LinkedIdentitiesBlock />}
         {active === "goals" && <GoalsTab kpi={kpi} loading={loading} />}
         {active === "billing" && <BillingTab />}
         {active === "team" && <PlaceholderBlock title="Команда" body="Управляй приглашениями и ролями на странице /accounts." />}

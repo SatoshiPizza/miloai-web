@@ -174,6 +174,18 @@ export type SocialLoginOut = {
   avatar_url?: string | null;
 };
 
+export type IdentityProvider = "telegram" | "google" | "meta" | "email";
+
+export type Identity = {
+  id: number;
+  provider: IdentityProvider | string;
+  provider_uid: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  last_login_at: string | null;
+};
+
 export type LandingAuditItem = {
   status: "ok" | "warn" | "fail" | string;
   message: string;
@@ -337,6 +349,11 @@ export const tgBridge = {
     api.patch<Lead>(`/api/web/leads/${id}`, body),
   createManualLead: (body: LeadCreateManual) =>
     api.post<Lead>("/api/web/leads/manual", body),
+
+  // ── Identities (linked login methods) ────────────────
+  identities: () => api.get<Identity[]>("/api/auth/identities"),
+  unlinkIdentity: (id: number) =>
+    api.del<{ ok: boolean }>(`/api/auth/identities/${id}`),
 
   // ── Billing ───────────────────────────────────────────
   billingStatus: () => api.get<BillingStatus>("/api/web/billing/status"),
