@@ -30,15 +30,31 @@ export default function LandingPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
+    <div className="min-h-screen bg-[var(--background)] flex flex-col">
       <Header />
-      <main className="max-w-[1280px] mx-auto px-6 lg:px-8 py-10 lg:py-16">
+      <main className="flex-1 max-w-[1280px] mx-auto w-full px-6 lg:px-8 py-10 lg:py-16">
         <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-10 lg:gap-14 items-start">
           <Hero />
           <AuthPanel />
         </div>
       </main>
+      <Footer />
     </div>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="border-t border-[var(--border)]/40 mt-10">
+      <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 flex flex-col sm:flex-row justify-between gap-3 text-[12.5px] text-[var(--ink-subtle)]">
+        <span>© MiloAI · Estonia · 2026</span>
+        <div className="flex gap-5">
+          <a href="/privacy" className="hover:text-[var(--ink-mute)] transition-colors">Privacy</a>
+          <a href="/terms"   className="hover:text-[var(--ink-mute)] transition-colors">Terms</a>
+          <a href="mailto:hello@miloai.ee" className="hover:text-[var(--ink-mute)] transition-colors">Contact</a>
+        </div>
+      </div>
+    </footer>
   );
 }
 
@@ -315,6 +331,13 @@ function AuthPanel() {
       <p className="text-[11px] text-[var(--ink-subtle)] mt-5 leading-relaxed flex items-start gap-1.5">
         <Mic className="size-3 mt-0.5 shrink-0" style={{ color: "var(--peach-deep)" } as React.CSSProperties} />
         Голосовое управление — после первого входа: подключи Telegram в&nbsp;настройках, и&nbsp;управляй рекламой голосом.
+      </p>
+
+      <p className="text-[10.5px] text-[var(--ink-subtle)] mt-4 leading-relaxed">
+        Создавая аккаунт ты соглашаешься с{" "}
+        <a href="/terms" className="underline hover:text-[var(--ink-mute)]">Условиями</a>{" "}
+        и{" "}
+        <a href="/privacy" className="underline hover:text-[var(--ink-mute)]">Политикой конфиденциальности</a>.
       </p>
     </div>
   );
