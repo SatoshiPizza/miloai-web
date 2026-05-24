@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sparkles, ArrowRight, Loader2, Mic } from "lucide-react";
 import { api } from "@/lib/api";
 import { getSessionToken, saveSession } from "@/lib/session";
-import { GoogleLoginButton } from "@/components/social-login";
+import { GoogleLoginButton, MetaLoginButton } from "@/components/social-login";
 
 /**
  * Marketing landing — replaces the old `/` → /dashboard redirect.
@@ -297,12 +297,20 @@ function AuthPanel() {
         <span className="flex-1 h-px bg-[var(--border)]" />
       </div>
 
-      <GoogleLoginButton
-        next="/dashboard"
-        onStart={() => { setBusy(true); setError(null); }}
-        onError={(m) => { setError(m); setBusy(false); }}
-        onDone={() => setBusy(false)}
-      />
+      <div className="flex flex-col gap-2.5">
+        <GoogleLoginButton
+          next="/dashboard"
+          onStart={() => { setBusy(true); setError(null); }}
+          onError={(m) => { setError(m); setBusy(false); }}
+          onDone={() => setBusy(false)}
+        />
+        <MetaLoginButton
+          next="/dashboard"
+          onStart={() => { setBusy(true); setError(null); }}
+          onError={(m) => { setError(m); setBusy(false); }}
+          onDone={() => setBusy(false)}
+        />
+      </div>
 
       <p className="text-[11px] text-[var(--ink-subtle)] mt-5 leading-relaxed flex items-start gap-1.5">
         <Mic className="size-3 mt-0.5 shrink-0" style={{ color: "var(--peach-deep)" } as React.CSSProperties} />

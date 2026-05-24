@@ -26,8 +26,9 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     const hasToken = !!getSessionToken();
     const hasDevShim = !!config.devUserId;
     if (!hasToken && !hasDevShim) {
-      const next = encodeURIComponent(pathname || "/dashboard");
-      router.replace(`/login?next=${next}`);
+      // Send to landing (anchor at the auth panel) — landing IS the login
+      // page now. /login still exists for backwards compat but redirects here.
+      router.replace("/#auth");
       return;
     }
     setChecked(true);

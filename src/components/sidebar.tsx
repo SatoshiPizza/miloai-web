@@ -45,7 +45,7 @@ export function Sidebar() {
 
   function logout() {
     clearSession();
-    window.location.assign("/login");
+    window.location.assign("/");
   }
 
   return (
