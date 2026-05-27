@@ -174,6 +174,47 @@ export type SocialLoginOut = {
   avatar_url?: string | null;
 };
 
+export type CompetitorAd = {
+  advertiser_name: string;
+  legal_name: string;
+  days_running: number;
+  format: "image" | "video" | "carousel" | string;
+  headline: string | null;
+  body: string | null;
+  image_url: string | null;
+  landing_url: string | null;
+  archive_url: string;
+};
+
+export type CompetitorOverview = {
+  players: number;
+  pages: number;
+  ads_90d: number;
+  active_ads: number;
+  top_formats: Record<string, number>;
+  top_languages: Record<string, number>;
+  ad_destinations: Record<string, number>;
+};
+
+export type CompetitorInsight = {
+  headline: string;
+  body: string;
+};
+
+export type CompetitorResearchResult = {
+  ok: boolean;
+  niche: string;
+  country: string;
+  overview: CompetitorOverview;
+  top_ads: CompetitorAd[];
+  insights: CompetitorInsight[];
+  is_mock: boolean;
+  data_sources: string[];
+  generated_at: string;
+  disclaimer?: string;
+  error?: string;
+};
+
 export type IdentityProvider = "telegram" | "google" | "meta" | "email";
 
 export type Identity = {
@@ -349,6 +390,9 @@ export const tgBridge = {
     api.patch<Lead>(`/api/web/leads/${id}`, body),
   createManualLead: (body: LeadCreateManual) =>
     api.post<Lead>("/api/web/leads/manual", body),
+
+  researchCompetitors: (niche: string, country?: string) =>
+    api.post<CompetitorResearchResult>("/api/web/competitors/research", { niche, country }),
 
   // ── Identities (linked login methods) ────────────────
   identities: () => api.get<Identity[]>("/api/auth/identities"),
