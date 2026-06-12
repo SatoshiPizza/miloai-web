@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Design handoff (.jsx mockups + READMEs) — reference only, not built into the app.
+/design-handoff
+
 # dependencies
 /node_modules
 /.pnp

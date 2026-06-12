@@ -113,6 +113,22 @@
   --meta-soft: #E5EEFE;
   --meta-ink: #0344AA;
 
+  /* ── Bold direction tokens (iteration 4) ───────────────────────── */
+  /* Dark command hero band — used on Dashboard, Campaign detail,
+     Analytics, killer-chat rail and Login. NOT on lists/settings. */
+  --hero-bg: linear-gradient(120deg, #211F1B 0%, #2A2621 55%, #322B23 100%);
+  --hero-cream: #F6F4EF;
+  --hero-cream-65: rgba(246,244,239,0.65);
+  --hero-cream-55: rgba(246,244,239,0.55);
+  --hero-cream-50: rgba(246,244,239,0.5);
+  --hero-cream-45: rgba(246,244,239,0.45);
+  --hero-surface: rgba(246,244,239,0.05);
+  --hero-border: rgba(246,244,239,0.1);
+  --hero-border-strong: rgba(246,244,239,0.16);
+  --hero-peach-wash: rgba(232,149,108,0.16);
+  --hero-peach-border: rgba(232,149,108,0.3);
+  --hero-peach-glow: rgba(232,149,108,0.22);
+
   --google: #4285F4;
   --google-soft: #E8F0FE;
   --google-ink: #1A56C7;

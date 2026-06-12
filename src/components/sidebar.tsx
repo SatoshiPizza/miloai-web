@@ -10,14 +10,19 @@ import { cn } from "@/lib/utils";
 import { clearSession, getSessionUser } from "@/lib/session";
 import { useEffect, useState } from "react";
 
+import { BusinessSwitcher } from "@/components/business-switcher";
+import { tgBridge, type BusinessSummary, type Me } from "@/lib/tg-bridge";
+
 /**
- * Sidebar nav per design handoff (README.md §0).
+ * Sidebar nav per design handoff (iteration 3).
  *
- * Style notes:
- *   - bg: cream (#F8F5EE → token --sidebar)
- *   - logo: peach sparkle + "MiloAI" in Bricolage Grotesque 18/700
- *   - nav items: 14-15 Geist; active = card-soft bg + ink text + 500 weight
- *   - bottom items (Accounts / Settings) pinned via flex-1 spacer above
+ * Layout order, top→bottom:
+ *   1. BusinessSwitcher (workspace picker, Slack/Notion-style)
+ *   2. Top nav items
+ *   3. Spacer
+ *   4. Bottom nav items (Accounts / Settings)
+ *   5. Session row (avatar + logout)
+ *   6. MiloAI logo (moved down per design v3 since business is the brand at top)
  */
 
 const TOP_NAV = [
@@ -40,30 +45,47 @@ const BOTTOM_NAV = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [me, setMe] = useState<ReturnType<typeof getSessionUser> | null>(null);
-  useEffect(() => { setMe(getSessionUser()); }, [pathname]);
+  const [session, setSession] = useState<ReturnType<typeof getSessionUser> | null>(null);
+  const [businesses, setBusinesses] = useState<BusinessSummary[]>([]);
+  const [activeBizId, setActiveBizId] = useState<number | null>(null);
+
+  useEffect(() => { setSession(getSessionUser()); }, [pathname]);
+
+  // Fetch businesses + active id from the backend. Falls back to silent empty
+  // (the switcher renders a "create first business" CTA in that case).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const me: Me = await tgBridge.me();
+        if (cancelled) return;
+        setBusinesses(me.businesses ?? []);
+        setActiveBizId(me.active_business_id ?? null);
+      } catch {
+        if (!cancelled) {
+          setBusinesses([]);
+          setActiveBizId(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pathname]);
 
   function logout() {
     clearSession();
     window.location.assign("/");
   }
 
+  const active = businesses.find((b) => b.id === activeBizId) ?? null;
+
   return (
     <aside
       className="hidden md:flex h-screen w-60 shrink-0 flex-col bg-sidebar border-r"
       style={{ borderColor: "var(--sidebar-border)" }}
     >
-      {/* Logo */}
-      <div className="px-4 pt-5 pb-4 flex items-center gap-2.5">
-        <SparkleLogo size={22} />
-        <div className="leading-tight">
-          <div className="font-heading text-[18px] font-bold tracking-tight text-foreground">
-            MiloAI
-          </div>
-          <div className="text-[11px] text-[var(--ink-subtle)] -mt-0.5">
-            AI media buyer
-          </div>
-        </div>
+      {/* Business switcher — top of sidebar */}
+      <div className="px-3.5 pt-3.5 pb-2">
+        <BusinessSwitcher active={active} businesses={businesses} />
       </div>
 
       {/* Top items */}
@@ -82,7 +104,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {me && (
+      {session && (
         <button
           onClick={logout}
           className="mx-2 mb-1 flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-[var(--ink-mute)] hover:bg-[var(--card-soft)]/60 hover:text-foreground transition-colors"
@@ -91,16 +113,27 @@ export function Sidebar() {
           <LogOut className="size-[15px]" strokeWidth={1.6} />
           <div className="flex-1 min-w-0 text-left leading-tight">
             <div className="truncate text-[13px] text-foreground">
-              {me.first_name || me.username || me.email || "Пользователь"}
+              {session.first_name || session.username || session.email || "Пользователь"}
             </div>
             <div className="truncate font-mono text-[10.5px] text-[var(--ink-subtle)]">
-              {me.username ? `@${me.username}` : (me.email ?? `id ${me.user_id}`)} · выйти
+              {session.username ? `@${session.username}` : (session.email ?? `id ${session.user_id}`)} · выйти
             </div>
           </div>
         </button>
       )}
-      <div className="px-4 py-2 text-[10px] text-[var(--ink-subtle)] font-mono">
-        v0.1 · {process.env.NEXT_PUBLIC_API_URL ? "prod" : "dev"}
+
+      {/* MiloAI brand at the bottom — secondary to the business identity */}
+      <div
+        className="flex items-center gap-2 px-4 py-2.5"
+        style={{ opacity: 0.55 }}
+      >
+        <SparkleLogo size={14} />
+        <div className="font-heading text-[12px] font-bold tracking-tight text-foreground">
+          MiloAI
+        </div>
+        <div className="ml-auto font-mono text-[9.5px] text-[var(--ink-subtle)]">
+          v0.1{process.env.NEXT_PUBLIC_API_URL ? "" : "·dev"}
+        </div>
       </div>
     </aside>
   );

@@ -7,6 +7,35 @@
 import { api } from "@/lib/api";
 import { config } from "@/lib/config";
 
+export type BusinessSummary = {
+  id: number;
+  name: string;
+  category: string | null;
+  site_url: string | null;
+  onboarding_complete: boolean;
+  is_active: boolean;
+};
+
+export type BusinessDetail = BusinessSummary & {
+  source_type: string | null;
+  instagram_url: string | null;
+  has_site: boolean;
+  description: string | null;
+  usp: string | null;
+  target_audience: string | null;
+  country: string | null;
+  city: string | null;
+  languages: string | null;
+  monthly_ad_budget: number | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  contact_whatsapp: string | null;
+  meta_ad_account_id: number | null;
+  google_ad_account_id: number | null;
+  onboarding_step: number;
+  photo_pool: unknown[] | null;
+};
+
 export type Me = {
   id: number;
   telegram_id: number | null;
@@ -16,6 +45,8 @@ export type Me = {
   onboarding_complete: boolean;
   language_code: string | null;
   has_telegram_paired: boolean;
+  active_business_id: number | null;
+  businesses: BusinessSummary[];
 };
 
 export type WebMessage = {
@@ -358,6 +389,27 @@ export const tgBridge = {
   me: () => api.get<Me>("/api/web/me"),
   startPair: () => api.post<PairStart>("/api/web/pair/start"),
   listMessages: () => api.get<WebMessage[]>("/api/web/messages"),
+
+  // ── Businesses (workspace switcher) ──
+  listBusinesses: () => api.get<BusinessSummary[]>("/api/web/businesses"),
+  activeBusiness: () => api.get<BusinessDetail>("/api/web/businesses/active"),
+  getBusiness: (id: number) =>
+    api.get<BusinessDetail>(`/api/web/businesses/${id}`),
+  createBusiness: (body: {
+    name: string;
+    category?: string;
+    source_type?: "site" | "instagram" | "none";
+    site_url?: string;
+    instagram_url?: string;
+  }) => api.post<BusinessDetail>("/api/web/businesses", body),
+  patchBusiness: (id: number, body: Partial<BusinessDetail>) =>
+    api.patch<BusinessDetail>(`/api/web/businesses/${id}`, body),
+  switchBusiness: (id: number) =>
+    api.post<BusinessSummary>("/api/web/businesses/switch", {
+      business_id: id,
+    }),
+  archiveBusiness: (id: number) =>
+    api.del<void>(`/api/web/businesses/${id}`),
   sendMessage: (text: string) =>
     api.post<WebMessage>("/api/web/messages", { text }),
   services: () => api.get<ServiceSummary[]>("/api/web/services"),
