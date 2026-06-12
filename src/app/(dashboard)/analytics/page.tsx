@@ -7,6 +7,7 @@ import {
   Target, Phone, BadgeEuro, LayoutGrid as Grid,
 } from "lucide-react";
 import { tgBridge, type CampaignsResponse, type DashboardKpi, type ChannelsResponse } from "@/lib/tg-bridge";
+import { HeroBand, KpiStrip, type HeroStat, type Kpi } from "@/components/bold";
 
 /**
  * Analytics — design handoff §screen-analytics.jsx.
@@ -44,21 +45,83 @@ export default function AnalyticsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const hero = buildAnalyticsHero(kpi, loading);
+  const cells = buildAnalyticsKpis(kpi, loading);
+
   return (
-    <div className="p-7 max-w-[1400px] flex flex-col gap-[18px]">
-      <AnalyticsHeader period={period} onChange={setPeriod} />
-      <AiBenchmarkCard kpi={kpi} loading={loading} />
-      <TrendChartCard campaigns={campaigns} loading={loading} />
+    <div className="mx-auto max-w-[1400px]">
+      {/* Bold hero with the benchmark verdict + CPL stat */}
+      <HeroBand
+        eyebrow={hero.eyebrow}
+        title={hero.title}
+        body={hero.body}
+        stat={hero.stat}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4">
-        <CohortPlaceholderCard />
-        <FunnelCard campaigns={campaigns} loading={loading} />
-      </div>
+      <div className="px-7 pb-10">
+        {/* Editorial KPI strip */}
+        <KpiStrip kpis={cells} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4">
-        <HeatmapPlaceholderCard />
-        <ByPlatformCard channels={channels} loading={loading} />
+        {/* Period selector — moved below the strip so it sits with the data sections */}
+        <div className="mt-6">
+          <PeriodTabs period={period} onChange={setPeriod} />
+        </div>
+
+        <div className="mt-5 flex flex-col gap-[18px]">
+          <TrendChartCard campaigns={campaigns} loading={loading} />
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
+            <CohortPlaceholderCard />
+            <FunnelCard campaigns={campaigns} loading={loading} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
+            <HeatmapPlaceholderCard />
+            <ByPlatformCard channels={channels} loading={loading} />
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+// Compact period tabs — extracted so the hero stays tight.
+function PeriodTabs({
+  period,
+  onChange,
+}: {
+  period: Period;
+  onChange: (p: Period) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex gap-1">
+        {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => {
+          const active = period === p;
+          return (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className="rounded-[8px] border px-3 py-1.5 text-[12.5px] font-medium transition-colors"
+              style={{
+                background: active ? "var(--ink)" : "transparent",
+                color: active ? "#fff" : "var(--ink-mute)",
+                borderColor: active ? "var(--ink)" : "var(--border)",
+              }}
+            >
+              {PERIOD_LABELS[p]}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        disabled
+        className="inline-flex items-center gap-1.5 rounded-[8px] border border-[var(--border)] bg-card px-3 py-1.5 text-[12.5px] text-[var(--ink)] disabled:opacity-70"
+        title="Скоро: сравнение с предыдущим периодом"
+      >
+        vs прошлый период
+        <ChevronDown className="size-3 text-[var(--ink-subtle)]" />
+      </button>
     </div>
   );
 }
@@ -653,4 +716,137 @@ function ByPlatformCard({ channels, loading }: { channels: ChannelsResponse | nu
 
 function formatNum(n: number): string {
   return n.toLocaleString("en-US").replace(/,/g, " ");
+}
+
+
+// ── Bold hero / KPI builders ─────────────────────────────────────────────
+
+
+function buildAnalyticsHero(kpi: DashboardKpi | null, loading: boolean) {
+  if (loading || !kpi) {
+    return {
+      eyebrow: "Бенчмарки",
+      title: <>Считаю где ты на рынке…</>,
+      body: "Подгружаю CPL, ROAS и спред по нише.",
+      stat: undefined as HeroStat | undefined,
+    } as const;
+  }
+
+  const hasData = kpi.spend_7d > 0 || kpi.leads_7d > 0;
+  if (!hasData) {
+    return {
+      eyebrow: "Бенчмарки",
+      title: (
+        <>
+          Данных пока нет.{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            Запусти первую кампанию
+          </em>{" "}
+          — покажу где ты против рынка.
+        </>
+      ),
+      body: "Бенчмарки EE/EU SMB по нише начнут появляться после первой недели открутки.",
+      stat: undefined as HeroStat | undefined,
+    } as const;
+  }
+
+  // Verdict logic: how does the user's CPL compare to a notional market avg
+  // (€78 for dental — generic placeholder until benchmarks API lands).
+  const MARKET_CPL = 78;
+  const cpl = kpi.cpl;
+
+  let title: React.ReactNode;
+  let stat: HeroStat;
+  if (cpl != null && cpl > 0) {
+    const ratio = MARKET_CPL / cpl;
+    if (ratio >= 2) {
+      title = (
+        <>
+          Ты в{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            топ-5% по цене лида
+          </em>{" "}
+          — CPL в {ratio.toFixed(1)}× ниже рынка.
+        </>
+      );
+    } else if (ratio >= 1.2) {
+      title = (
+        <>
+          CPL{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            ниже рынка в {ratio.toFixed(1)}×
+          </em>{" "}
+          — есть пространство масштабировать.
+        </>
+      );
+    } else if (ratio >= 0.85) {
+      title = (
+        <>
+          CPL{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            на уровне рынка
+          </em>{" "}
+          — пора тестировать новые офферы для скачка.
+        </>
+      );
+    } else {
+      title = (
+        <>
+          CPL{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            выше рынка
+          </em>{" "}
+          в {(1 / ratio).toFixed(1)}× — критично пересмотреть креативы.
+        </>
+      );
+    }
+    stat = {
+      label: "CPL · vs рынок",
+      value: `${ratio.toFixed(1)}×`,
+      unit: ratio >= 1 ? "ниже" : "выше",
+      delta: `€${cpl.toFixed(0)} vs €${MARKET_CPL}`,
+      dir: ratio >= 1 ? "up" : "down",
+    };
+  } else {
+    title = (
+      <>
+        {kpi.leads_7d} лидов за 7 дней при €{kpi.spend_7d.toFixed(0)} спенда —{" "}
+        <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+          накапливаю данные для бенчмарка
+        </em>
+        .
+      </>
+    );
+    stat = {
+      label: "Spend · 7д",
+      value: `€${Math.round(kpi.spend_7d)}`,
+    };
+  }
+
+  return {
+    eyebrow: "Бенчмарки · твоя ниша",
+    title,
+    body: `${kpi.active_campaigns} активных кампаний · ${kpi.leads_7d} лидов · €${kpi.spend_7d.toFixed(0)} спенда за 7 дней`,
+    stat,
+  } as const;
+}
+
+
+function buildAnalyticsKpis(kpi: DashboardKpi | null, loading: boolean): Kpi[] {
+  const empty: Kpi[] = [
+    { label: "Spend", value: "—" },
+    { label: "Leads", value: "—" },
+    { label: "CPL", value: "—" },
+    { label: "ROAS", value: "—" },
+  ];
+  if (loading || !kpi) return empty;
+  return [
+    { label: "Spend · 7д", value: kpi.spend_7d > 0 ? `€${Math.round(kpi.spend_7d)}` : "€0" },
+    { label: "Leads · 7д", value: String(kpi.leads_7d) },
+    { label: "CPL", value: kpi.cpl != null ? `€${kpi.cpl.toFixed(0)}` : "—" },
+    {
+      label: "ROAS",
+      value: kpi.cpl != null && kpi.cpl > 0 ? `${(120 / kpi.cpl).toFixed(1)}×` : "—",
+    },
+  ];
 }

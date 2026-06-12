@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { tgBridge, type WebMessage, type Me } from "@/lib/tg-bridge";
 import { toast } from "sonner";
+import { HeroBand } from "@/components/bold";
 
 /**
  * Chat split-view — design handoff iter-2 §screen-chat.jsx.
@@ -67,28 +68,24 @@ export default function ChatPage() {
   const groups = useMemo(() => groupByDay(messages), [messages]);
 
   return (
-    <div className="p-7 max-w-[1400px] h-[calc(100vh-0px)] flex flex-col">
-      {/* Header */}
-      <header className="shrink-0 mb-4">
-        <div className="flex items-center gap-2.5 mb-1.5">
-          <div
-            className="size-[26px] rounded-full flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, var(--peach), var(--peach-deep))" }}
-          >
-            <Sparkles className="size-[14px] text-white" strokeWidth={1.7} />
-          </div>
-          <h1 className="font-heading text-[26px] font-bold leading-none tracking-[-0.02em]">
-            Чат с AI
-          </h1>
-          <SyncBadge paired={paired} />
-        </div>
-        <p className="text-[13.5px] text-[var(--ink-mute)] ml-[36px]">
-          Всё что пишешь здесь — летит в Telegram. И наоборот: голос → распознанный текст → действие.
-        </p>
-      </header>
+    <div className="mx-auto flex h-[calc(100vh-0px)] max-w-[1400px] flex-col">
+      {/* Bold compact hero — single line "Управляй голосом" pitch + sync state */}
+      <HeroBand
+        compact
+        eyebrow={paired ? "Канал активен" : "Подключи Telegram"}
+        title={
+          <>
+            Управляй голосом{" "}
+            <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+              из Telegram
+            </em>
+          </>
+        }
+        body="Всё что пишешь здесь — летит в Telegram. И наоборот: голос → распознанный текст → действие."
+      />
 
       {/* Split body */}
-      <div className="flex-1 min-h-0 flex gap-[22px]">
+      <div className="flex min-h-0 flex-1 gap-[22px] px-7 py-5">
         {/* ── Left: web chat ────────────────────────────────────── */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 rounded-[14px] border border-[var(--border)] bg-card overflow-hidden flex flex-col">
