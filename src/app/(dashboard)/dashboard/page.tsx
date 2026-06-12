@@ -15,6 +15,7 @@ import { tgBridge, type DashboardKpi, type CampaignSummary, type Me } from "@/li
 import { AiChatMini } from "@/components/ai-chat-mini";
 import { Sparkline, fakeWeekCurve } from "@/components/sparkline";
 import { PlatformBadge } from "@/components/platform-badge";
+import { HeroBand, KpiStrip, type Kpi } from "@/components/bold";
 
 
 /** Time-of-day greeting in the user's language. */
@@ -72,72 +73,40 @@ export default function DashboardPage() {
     )
     .slice(0, 5);
 
+  const hero = buildHeroProps({ kpi, me, loading });
+  const kpiCells = buildKpiCells({ kpi, campaigns, loading });
+
   return (
-    <div className="p-8 max-w-[1400px]">
-      <header className="flex items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 className="font-heading text-[28px] font-bold tracking-tight leading-tight">
-            {greetingFor(me?.language_code, new Date().getHours())}
-            {me?.first_name || me?.business_name ? `, ${me.first_name || me.business_name}` : ""}
-          </h1>
-          <p className="text-[13.5px] text-[var(--ink-mute)] mt-1">
-            Сводка по активным кампаниям за последние 7 дней.
-          </p>
-        </div>
-        <Link href="/campaigns/new">
-          <Button size="lg" className="gap-2">
-            <Rocket className="size-4" /> Новая кампания
-          </Button>
-        </Link>
-      </header>
+    <div className="mx-auto max-w-[1400px]">
+      {/* Bold command hero — single dominant AI insight + topline stat */}
+      <HeroBand
+        eyebrow={hero.eyebrow}
+        title={hero.title}
+        body={hero.body}
+        actions={[
+          {
+            label: "Новая кампания",
+            primary: true,
+            href: "/campaigns/new",
+            icon: <Rocket className="size-[14px]" />,
+          },
+        ]}
+        stat={hero.stat}
+      />
 
-      {/* Two-column layout per design handoff: main (flex-1) + right (320px). */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 min-w-0 space-y-8">
+      <div className="px-6 pb-10 lg:px-8">
+        {/* Editorial KPI strip — overlaps the hero by -18 */}
+        <KpiStrip kpis={kpiCells} />
 
-      {/* AI Insights peach card — design highlight (handoff §Dashboard) */}
-      <AiInsightsCard kpi={kpi} loading={loading} />
+        {error && (
+          <div className="mt-6 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
 
-
-      {error && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      {/* KPI cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          icon={Euro}
-          label="Spend (7d)"
-          value={kpi ? formatEur(kpi.spend_7d) : null}
-          sub={kpi ? `${kpi.active_campaigns} активных · ${kpi.total_campaigns} всего` : "—"}
-          loading={loading}
-          breakdown={breakdownByPlatform(campaigns, "spend")}
-        />
-        <KpiCard
-          icon={Target}
-          label="Leads (7d)"
-          value={kpi ? String(kpi.leads_7d) : null}
-          sub={kpi && kpi.leads_7d === 0 ? "ноль конверсий — проверь CTR" : "—"}
-          loading={loading}
-          breakdown={breakdownByPlatform(campaigns, "conversions")}
-        />
-        <KpiCard
-          icon={MousePointerClick}
-          label="CPL"
-          value={kpi?.cpl != null ? formatEur(kpi.cpl) : "—"}
-          sub={kpi?.target_cpl != null ? `vs €${kpi.target_cpl} target` : "цель не задана"}
-          loading={loading}
-        />
-        <KpiCard
-          icon={TrendingUp}
-          label="Кампании"
-          value={kpi ? `${kpi.active_campaigns} / ${kpi.total_campaigns}` : null}
-          sub="активных / всего"
-          loading={loading}
-        />
-      </section>
+        {/* Two-column layout per design handoff: main (flex-1) + right (320px). */}
+        <div className="mt-8 flex flex-col gap-6 lg:flex-row">
+          <div className="min-w-0 flex-1 space-y-8">
 
       {/* Активные кампании */}
       <section>
@@ -248,6 +217,7 @@ export default function DashboardPage() {
             </Card>
           </div>
         </aside>
+        </div>
       </div>
     </div>
   );
@@ -446,4 +416,193 @@ function formatEur(n: number): string {
   if (n === 0) return "€0";
   if (n < 100) return `€${n.toFixed(2)}`;
   return `€${Math.round(n)}`;
+}
+
+
+// ── Bold hero / KPI builders ─────────────────────────────────────────────
+//
+// We translate the existing KPI numbers into the iter-4 hero pattern: one
+// dominant AI-flavoured headline + a topline numeric stat. The remaining
+// metrics fan out into the editorial KpiStrip directly below.
+
+
+function buildHeroProps({
+  kpi,
+  me,
+  loading,
+}: {
+  kpi: DashboardKpi | null;
+  me: Me | null;
+  loading: boolean;
+}) {
+  const hi = greetingFor(me?.language_code, new Date().getHours());
+  const who = me?.first_name || me?.business_name;
+  const greeting = who ? `${hi}, ${who}` : hi;
+
+  if (loading || !kpi) {
+    return {
+      eyebrow: "Главное за сегодня",
+      title: <>{greeting}</>,
+      body: "Подгружаю свежую сводку по кампаниям…",
+      stat: undefined as Kpi | undefined,
+    } as const;
+  }
+
+  // Pick the topline insight from the same priority chain that AiInsightsCard
+  // used to use — we keep that file mounted below for the long tail.
+  const title: React.ReactNode = (() => {
+    if (kpi.total_campaigns === 0) {
+      return (
+        <>
+          {greeting} — пока нет кампаний.{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            Запусти первую
+          </em>{" "}
+          и я начну смотреть.
+        </>
+      );
+    }
+    if (kpi.active_campaigns === 0) {
+      return (
+        <>
+          Все {kpi.total_campaigns} кампаний{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            на паузе
+          </em>{" "}
+          — данные не накопятся.
+        </>
+      );
+    }
+    if (kpi.spend_7d > 0 && kpi.leads_7d === 0) {
+      return (
+        <>
+          €{kpi.spend_7d.toFixed(0)} ушло за 7 дней,{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            0 конверсий
+          </em>{" "}
+          — проверь лендинг.
+        </>
+      );
+    }
+    if (kpi.cpl != null && kpi.target_cpl != null && kpi.cpl <= kpi.target_cpl) {
+      return (
+        <>
+          CPL{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            €{kpi.cpl.toFixed(0)}
+          </em>{" "}
+          ниже целевого €{kpi.target_cpl.toFixed(0)} — пора масштабировать.
+        </>
+      );
+    }
+    if (kpi.cpl != null && kpi.target_cpl != null && kpi.cpl > kpi.target_cpl) {
+      return (
+        <>
+          CPL{" "}
+          <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+            €{kpi.cpl.toFixed(0)}
+          </em>{" "}
+          выше цели €{kpi.target_cpl.toFixed(0)} — пересмотри офферы.
+        </>
+      );
+    }
+    return (
+      <>
+        {greeting}.{" "}
+        <em className="not-italic italic" style={{ color: "var(--peach)" }}>
+          {kpi.active_campaigns}
+        </em>{" "}
+        кампаний работают.
+      </>
+    );
+  })();
+
+  // Hero stat: CPL when we have a target to compare, otherwise active campaigns count.
+  let stat: Kpi | undefined;
+  if (kpi.cpl != null && kpi.target_cpl != null) {
+    const delta = kpi.cpl - kpi.target_cpl;
+    stat = {
+      label: "CPL · 7д",
+      value: `€${kpi.cpl.toFixed(0)}`,
+      delta: `${delta >= 0 ? "+" : ""}€${Math.abs(delta).toFixed(0)}`,
+      dir: delta <= 0 ? "up" : "down",
+    };
+  } else if (kpi.spend_7d > 0) {
+    stat = {
+      label: "Spend · 7д",
+      value: `€${Math.round(kpi.spend_7d)}`,
+    };
+  } else {
+    stat = {
+      label: "Кампании",
+      value: `${kpi.active_campaigns}`,
+      delta: `/ ${kpi.total_campaigns}`,
+    };
+  }
+
+  return {
+    eyebrow: "Главное за сегодня",
+    title,
+    body: `${kpi.active_campaigns} активных · ${kpi.total_campaigns} всего · ${kpi.leads_7d} лидов за 7 дней`,
+    stat,
+  } as const;
+}
+
+
+function buildKpiCells({
+  kpi,
+  campaigns,
+  loading,
+}: {
+  kpi: DashboardKpi | null;
+  campaigns: CampaignSummary[] | null;
+  loading: boolean;
+}): Kpi[] {
+  const empty: Kpi[] = [
+    { label: "Spend · 7д", value: "—" },
+    { label: "Leads · 7д", value: "—" },
+    { label: "CPL", value: "—" },
+    { label: "Кампании", value: "—" },
+  ];
+  if (loading || !kpi) return empty;
+
+  const spend = breakdownByPlatform(campaigns, "spend");
+  const leads = breakdownByPlatform(campaigns, "conversions");
+
+  return [
+    {
+      label: "Spend · 7д",
+      value: formatEur(kpi.spend_7d),
+      breakdown: spend
+        ? { meta: spend.meta, google: spend.google }
+        : undefined,
+    },
+    {
+      label: "Leads · 7д",
+      value: String(kpi.leads_7d),
+      breakdown: leads
+        ? { meta: leads.meta, google: leads.google }
+        : undefined,
+    },
+    {
+      label: "CPL",
+      value: kpi.cpl != null ? formatEur(kpi.cpl) : "—",
+      delta:
+        kpi.cpl != null && kpi.target_cpl != null
+          ? `${kpi.cpl <= kpi.target_cpl ? "−" : "+"}€${Math.abs(
+              kpi.cpl - kpi.target_cpl,
+            ).toFixed(0)} vs цель`
+          : undefined,
+      dir:
+        kpi.cpl != null && kpi.target_cpl != null
+          ? kpi.cpl <= kpi.target_cpl
+            ? "up"
+            : "down"
+          : undefined,
+    },
+    {
+      label: "Кампании",
+      value: `${kpi.active_campaigns} / ${kpi.total_campaigns}`,
+    },
+  ];
 }
