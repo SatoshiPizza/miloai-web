@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { PlatformBadge } from "@/components/platform-badge";
 import { tgBridge, type CampaignDetail, type CampaignRecommendation, type LandingAuditReport } from "@/lib/tg-bridge";
+import { HeroBand, KpiStrip, type HeroStat, type Kpi } from "@/components/bold";
 
 /**
  * Campaign detail — design handoff iter-2 §screen-campaign.
@@ -161,20 +162,36 @@ export default function CampaignDetailPage({
 
   const isActive = data.status === "active";
 
-  return (
-    <div className="p-7 max-w-[1400px]">
-      {/* Header */}
-      <BackBreadcrumb name={data.name} />
-      <CampaignHeader data={data} />
+  const heroProps = buildCampaignHero(data, isActive, busy, pause, resume);
+  const kpiCells = buildCampaignKpis(data);
 
-      {/* Two-column body */}
-      <div className="flex flex-col lg:flex-row gap-[22px] mt-5">
-        {/* ── Left column ───────────────────────────────────────── */}
-        <div className="flex-1 min-w-0 space-y-[18px]">
-          <CampaignChartCard data={data} />
-          <MetricGrid data={data} />
-          <CampaignTimeline data={data} />
-        </div>
+  return (
+    <div className="mx-auto max-w-[1400px]">
+      {/* Breadcrumb above the dark band so the back link sits on cream bg */}
+      <div className="px-7 pt-6">
+        <BackBreadcrumb name={data.name} />
+      </div>
+
+      {/* Bold hero — AI verdict + topline CPA */}
+      <HeroBand
+        eyebrow={heroProps.eyebrow}
+        title={heroProps.title}
+        body={heroProps.body}
+        actions={heroProps.actions}
+        stat={heroProps.stat}
+      />
+
+      <div className="px-7 pb-10">
+        {/* Editorial KPI strip — overlaps the hero by -18 */}
+        <KpiStrip kpis={kpiCells} />
+
+        {/* Two-column body */}
+        <div className="mt-7 flex flex-col gap-[22px] lg:flex-row">
+          {/* ── Left column ───────────────────────────────────────── */}
+          <div className="min-w-0 flex-1 space-y-[18px]">
+            <CampaignChartCard data={data} />
+            <CampaignTimeline data={data} />
+          </div>
 
         {/* ── Right column (320px) ─────────────────────────────── */}
         <aside className="w-full lg:w-[320px] shrink-0 space-y-4">
@@ -279,6 +296,7 @@ export default function CampaignDetailPage({
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
@@ -838,4 +856,109 @@ function formatEur(n: number): string {
   if (n === 0) return "€0";
   if (n < 100) return `€${n.toFixed(2)}`;
   return `€${Math.round(n)}`;
+}
+
+
+// ── Bold hero / KPI builders ─────────────────────────────────────────────
+
+
+function buildCampaignHero(
+  data: CampaignDetail,
+  isActive: boolean,
+  busy: "pause" | "resume" | "budget" | "landing" | null,
+  pause: () => void,
+  resume: () => void,
+) {
+  const eyebrow = isActive
+    ? "Кампания · работает"
+    : data.status === "paused"
+      ? "Кампания · на паузе"
+      : "Кампания";
+
+  // Verdict from AI advice when present; otherwise a plain-language summary.
+  const verdict = (data.advice?.summary || "").trim();
+  const title: React.ReactNode = verdict
+    ? wrapVerdictAccents(verdict)
+    : data.name;
+
+  const body =
+    `${data.ad_account_name} · ${data.objective || "—"}` +
+    (data.daily_budget
+      ? ` · €${data.daily_budget.toFixed(0)}/день`
+      : "");
+
+  // Topline stat: CPA when known, otherwise spend.
+  let stat: HeroStat;
+  if (data.cpa != null) {
+    stat = {
+      label: "CPA · 7д",
+      value: formatEur(data.cpa),
+    };
+  } else {
+    stat = { label: "Spend · 7д", value: formatEur(data.spend) };
+  }
+
+  const actions = [
+    isActive
+      ? {
+          label: busy === "pause" ? "Пауза…" : "Поставить на паузу",
+          primary: false,
+          icon: <Pause className="size-[14px]" />,
+          onClick: pause,
+        }
+      : {
+          label: busy === "resume" ? "Запуск…" : "Возобновить",
+          primary: true,
+          icon: <Play className="size-[14px]" />,
+          onClick: resume,
+        },
+  ];
+
+  return { eyebrow, title, body, actions, stat };
+}
+
+
+function buildCampaignKpis(data: CampaignDetail): Kpi[] {
+  const ctrPct = data.ctr != null ? data.ctr * 100 : null;
+  return [
+    { label: "Spend · 7д", value: formatEur(data.spend) },
+    { label: "Conv · 7д", value: String(data.conversions) },
+    {
+      label: "CPA",
+      value: data.cpa != null ? formatEur(data.cpa) : "—",
+    },
+    {
+      label: "CTR",
+      value: ctrPct != null ? `${ctrPct.toFixed(2)}%` : "—",
+    },
+  ];
+}
+
+
+/**
+ * Convert plain verdict text into a HeroBand-friendly title where any
+ * "<verdict>" segment that looks like a punchline is wrapped in peach.
+ * Falls back to plain string if we can't find a clean accent.
+ */
+function wrapVerdictAccents(text: string): React.ReactNode {
+  // Find a phrase to accent in peach — look for em-dashes ("—") or "пора" /
+  // "можно" markers that typically lead the action verb.
+  const triggers = [" — ", " пора ", " можно ", " нужно ", " нельзя "];
+  for (const t of triggers) {
+    const idx = text.indexOf(t);
+    if (idx > 0 && idx < text.length - t.length) {
+      return (
+        <>
+          {text.slice(0, idx + t.length)}
+          <em
+            className="not-italic italic"
+            style={{ color: "var(--peach)" }}
+          >
+            {text.slice(idx + t.length)}
+          </em>
+        </>
+      );
+    }
+  }
+  return text;
 }
