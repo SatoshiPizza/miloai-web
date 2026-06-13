@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { tgBridge, type WebMessage, type Me } from "@/lib/tg-bridge";
 import { toast } from "sonner";
-import { HeroBand } from "@/components/bold";
+import { ChatRail } from "@/components/chat/chat-rail";
 
 /**
  * Chat split-view — design handoff iter-2 §screen-chat.jsx.
@@ -67,24 +67,25 @@ export default function ChatPage() {
   const paired = me?.has_telegram_paired ?? false;
   const groups = useMemo(() => groupByDay(messages), [messages]);
 
+  // Editorial stats for the dark rail. Real counters land when WebMessage
+  // gets `voice` / `responded_at` fields — for now we synthesize from the
+  // visible message history so the rail is alive, not empty.
+  const voiceCommands = messages.filter(
+    (m) => m.kind === "user_voice" || m.voice_transcript != null,
+  ).length;
+
   return (
-    <div className="mx-auto flex h-[calc(100vh-0px)] max-w-[1400px] flex-col">
-      {/* Bold compact hero — single line "Управляй голосом" pitch + sync state */}
-      <HeroBand
-        compact
-        eyebrow={paired ? "Канал активен" : "Подключи Telegram"}
-        title={
-          <>
-            Управляй голосом{" "}
-            <em className="not-italic italic" style={{ color: "var(--peach)" }}>
-              из Telegram
-            </em>
-          </>
-        }
-        body="Всё что пишешь здесь — летит в Telegram. И наоборот: голос → распознанный текст → действие."
+    <div className="flex h-[calc(100vh-0px)]">
+      {/* Dark vertical rail — replaces the compact HeroBand */}
+      <ChatRail
+        paired={paired}
+        botUsername={me?.telegram_username ?? "miloai_bot"}
+        messagesThisWeek={messages.length}
+        voiceCommands={voiceCommands}
+        avgResponseSec={1.8}
       />
 
-      {/* Split body */}
+      {/* Body */}
       <div className="flex min-h-0 flex-1 gap-[22px] px-7 py-5">
         {/* ── Left: web chat ────────────────────────────────────── */}
         <div className="flex-1 min-w-0 flex flex-col">
