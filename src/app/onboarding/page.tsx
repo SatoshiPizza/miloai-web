@@ -32,6 +32,8 @@ import {
   type SourceChoice,
 } from "@/components/onboarding/step-1b-source";
 import { Step3Analysis } from "@/components/onboarding/step-3-analysis";
+import { Step4Profile } from "@/components/onboarding/step-4-profile";
+import { Step6Plan } from "@/components/onboarding/step-6-plan";
 
 type Phase = "1a" | "1b" | "2" | "3" | "4" | "5" | "6";
 
@@ -176,6 +178,16 @@ export default function OnboardingPage() {
         textDescription={source?.text_description}
         onBack={() => setPhase("2")}
         onDone={async () => {
+          // Step 3 wrote fresh fields directly into the DB via the analyzer;
+          // re-fetch the active business so Step 4 sees the AI-extracted
+          // USP/audience/contacts instead of the stale React state.
+          try {
+            const fresh = await tgBridge.activeBusiness();
+            setBusiness(fresh);
+            setCategory(fresh.category ?? null);
+          } catch {
+            // best-effort; the manual persistStep below still advances
+          }
           await persistStep({ onboarding_step: 4 });
           setPhase("4");
         }}
@@ -183,25 +195,31 @@ export default function OnboardingPage() {
     );
   }
 
-  // ── Step 4: profile confirmation (placeholder) ──
+  // ── Step 4: profile confirmation ──
   if (phase === "4") {
+    if (!business) {
+      // Edge case — analyze finished but business wasn't re-fetched. Show a
+      // bridge that retries; once business is in state, this branch
+      // re-renders into the full editor.
+      return (
+        <PlaceholderStep
+          stepIdx={3}
+          eyebrow="Профиль"
+          title="Подгружаю профиль…"
+          primaryLabel="Назад к анализу"
+          onPrimary={() => setPhase("3")}
+        />
+      );
+    }
     return (
-      <PlaceholderStep
-        stepIdx={3}
-        eyebrow="Профиль"
-        title="Проверь, что AI понял правильно"
-        body={
-          business?.usp
-            ? `«${business.usp}»`
-            : "Профиль готов — посмотри детали в дашборде. Если что-то не так — поправь в /services."
-        }
-        primaryLabel="Всё верно"
-        onPrimary={async () => {
+      <Step4Profile
+        business={business}
+        onBack={() => setPhase("3")}
+        onBusinessUpdate={setBusiness}
+        onNext={async () => {
           await persistStep({ onboarding_step: 5 });
           setPhase("5");
         }}
-        secondaryLabel="Назад"
-        onSecondary={() => setPhase("3")}
       />
     );
   }
@@ -229,16 +247,22 @@ export default function OnboardingPage() {
   }
 
   // ── Step 6: starting plan ──
+  if (!business) {
+    return (
+      <PlaceholderStep
+        stepIdx={5}
+        eyebrow="Готово"
+        title="Подгружаю план…"
+        primaryLabel="Назад"
+        onPrimary={() => setPhase("5")}
+      />
+    );
+  }
   return (
-    <PlaceholderStep
-      stepIdx={5}
-      eyebrow="Готово"
-      title="Старт"
-      body={`Профиль готов · ${business?.name ?? "Бизнес"} · ${
-        business?.category ?? "категория"
-      }. Открываем дашборд.`}
-      primaryLabel="Открыть дашборд"
-      onPrimary={async () => {
+    <Step6Plan
+      business={business}
+      onBack={() => setPhase("5")}
+      onAccept={async () => {
         await persistStep({ onboarding_complete: true, onboarding_step: 6 });
         router.replace("/dashboard");
       }}

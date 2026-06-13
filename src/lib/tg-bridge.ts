@@ -34,6 +34,30 @@ export type BusinessDetail = BusinessSummary & {
   google_ad_account_id: number | null;
   onboarding_step: number;
   photo_pool: unknown[] | null;
+  // Snapshot from the campaign-import roll-up the onboarding pipeline writes
+  // at Step 3. Onboarding Step 6 reads this to render either the rich-data
+  // variant (imported campaigns with current CPL → plan) or the empty-state
+  // checklist. Shape is intentionally loose because the backend can extend
+  // it without bumping every consumer.
+  starting_plan?: {
+    platforms?: Record<string, {
+      connected: boolean;
+      account_name?: string | null;
+      campaigns_count?: number;
+      active_count?: number;
+      spend_7d?: number;
+      leads_7d?: number;
+      cpl_7d?: number | null;
+      top_campaigns?: Array<{
+        name: string; status: string; spend_7d: number; leads_7d: number;
+        cpa: number | null; cpc: number | null; ctr: number | null;
+      }>;
+      error?: string;
+    }>;
+    total_spend_7d?: number;
+    total_leads_7d?: number;
+    any_connected?: boolean;
+  } | null;
 };
 
 export type Me = {
