@@ -31,8 +31,10 @@ import {
   Step1bSource,
   type SourceChoice,
 } from "@/components/onboarding/step-1b-source";
+import { Step2Cabinets } from "@/components/onboarding/step-2-cabinets";
 import { Step3Analysis } from "@/components/onboarding/step-3-analysis";
 import { Step4Profile } from "@/components/onboarding/step-4-profile";
+import { Step5Telegram } from "@/components/onboarding/step-5-telegram";
 import { Step6Plan } from "@/components/onboarding/step-6-plan";
 
 type Phase = "1a" | "1b" | "2" | "3" | "4" | "5" | "6";
@@ -147,25 +149,15 @@ export default function OnboardingPage() {
     );
   }
 
-  // ── Step 2: cabinets (placeholder — real OAuth wiring next pass) ──
+  // ── Step 2: cabinets — inline OAuth with polling ──
   if (phase === "2") {
     return (
-      <PlaceholderStep
-        stepIdx={1}
-        eyebrow="Кабинеты"
-        title="Подключи рекламные кабинеты"
-        body="Чтобы AI смог импортировать существующие кампании и заметить аномалии, нужны доступы к Meta и Google Ads. Подключение через OAuth — пароли мы не храним."
-        primaryLabel="Сделать позже"
-        onPrimary={async () => {
+      <Step2Cabinets
+        onBack={() => setPhase("1b")}
+        onNext={async () => {
           await persistStep({ onboarding_step: 3 });
           setPhase("3");
         }}
-        secondaryLabel="Назад"
-        onSecondary={() => setPhase("1b")}
-        bullets={[
-          { icon: Plug, label: "Meta Ads", sub: "Кабинеты + Pages + Pixel" },
-          { icon: Plug, label: "Google Ads", sub: "Кабинеты + история запросов" },
-        ]}
       />
     );
   }
@@ -224,24 +216,16 @@ export default function OnboardingPage() {
     );
   }
 
-  // ── Step 5: Telegram pairing (placeholder — real flow lives at /accounts) ──
+  // ── Step 5: Telegram pairing — inline deep-link + poll ──
   if (phase === "5") {
     return (
-      <PlaceholderStep
-        stepIdx={4}
-        eyebrow="Telegram"
-        title="Управляй голосом из Telegram"
-        body="После подключения сможешь записать голосовое и AI запустит кампанию. Подключение можно сделать сейчас или потом — в /accounts."
-        primaryLabel="Сделать позже"
-        onPrimary={async () => {
+      <Step5Telegram
+        initialPaired={false /* /me re-poll inside the component will flip it */}
+        onBack={() => setPhase("4")}
+        onNext={async () => {
           await persistStep({ onboarding_step: 6 });
           setPhase("6");
         }}
-        secondaryLabel="Подключить в /accounts"
-        onSecondary={() => router.push("/accounts")}
-        bullets={[
-          { icon: Send, label: "Telegram bot", sub: "Голосовые → действия в кабинете" },
-        ]}
       />
     );
   }
