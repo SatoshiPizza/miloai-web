@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Loader2, Users, FileText, Layers, Activity, Lightbulb, ExternalLink, AlertTriangle } from "lucide-react";
+import Link from "next/link";
+import { Search, Loader2, Users, FileText, Layers, Activity, Lightbulb, ExternalLink, AlertTriangle, Sparkles } from "lucide-react";
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
 import { toast } from "sonner";
 import { tgBridge, type CompetitorResearchResult, type CompetitorAd } from "@/lib/tg-bridge";
@@ -393,6 +394,27 @@ function AdCard({ ad, platform }: { ad: CompetitorAd; platform: Tab }) {
             <ExternalLink className="size-2.5" />
           </a>
         </div>
+
+        {/* Counter-creative CTA — wires Competitors → Creatives flow.
+            Passes the competitor's headline + body + format as a brief; the
+            /creatives page picks it up via search params and shows a banner. */}
+        <Link
+          href={
+            `/creatives?counter=1` +
+            `&advertiser=${encodeURIComponent(ad.advertiser_name)}` +
+            `&headline=${encodeURIComponent(ad.headline || "")}` +
+            `&body=${encodeURIComponent(ad.body || "")}` +
+            `&format=${encodeURIComponent(ad.format)}`
+          }
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-[11.5px] font-medium text-white transition-opacity hover:opacity-90"
+          style={{
+            background: "var(--peach)",
+            boxShadow: "0 3px 8px -3px rgba(232,149,108,0.5)",
+          }}
+        >
+          <Sparkles className="size-3" strokeWidth={1.7} />
+          Создать контр-креатив
+        </Link>
       </div>
     </div>
   );

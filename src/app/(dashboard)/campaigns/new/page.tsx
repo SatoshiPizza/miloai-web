@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, ArrowRight, Rocket, Sparkles, Check, AlertTriangle, X,
@@ -37,6 +37,19 @@ type PlatformKey = "meta" | "google";
  */
 export default function NewCampaignWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Prefilled service from /services → "Запустить кампанию" CTA. Read once
+  // on mount so subsequent state changes (e.g. user picks a different service)
+  // aren't fought by URL re-reads. The same query also drives step skipping
+  // when present: we jump straight to the budget step (3) because the
+  // platforms step is still useful, but service is no longer ambiguous.
+  const prefilledServiceId = (() => {
+    const raw = searchParams?.get("service");
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : null;
+  })();
+
   const [step, setStep] = useState<Step>(1);
 
   // Step 1 — platforms
@@ -67,11 +80,20 @@ export default function NewCampaignWizard() {
         setServices(s);
         setAccounts(a);
         setPlatforms({ meta: a.has_meta, google: a.has_google });
+        // Hydrate service prefill once data lands. We hop straight to the
+        // budget step (3) because the user just expressed clear intent
+        // ("Запустить кампанию для этой услуги") — making them re-pick the
+        // service on step 2 is friction.
+        if (prefilledServiceId && s.some((svc) => svc.id === prefilledServiceId)) {
+          setServiceId(prefilledServiceId);
+          setStep(3);
+        }
       })
       .catch((e) => {
         console.error(e);
         toast.error("Не удалось загрузить данные. Backend на :8000?");
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const dailyEur = Math.max(1, parseFloat(budget) || 0);

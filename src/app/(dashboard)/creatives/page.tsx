@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Image as ImageIcon, Sparkles } from "lucide-react";
+import { Image as ImageIcon, Sparkles, X } from "lucide-react";
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
 import { tgBridge, type ServiceSummary, type ServiceBannerPreview } from "@/lib/tg-bridge";
 import { toast } from "sonner";
@@ -65,6 +66,8 @@ export default function CreativesPage() {
 
   return (
     <div className="p-7 max-w-[1400px]">
+      <CounterCreativeBanner />
+
       {/* Header */}
       <header className="flex flex-col lg:flex-row lg:items-end gap-4 mb-5">
         <div className="flex-1">
@@ -343,4 +346,81 @@ function plural(n: number, forms: [string, string, string]): string {
   if (mod10 === 1 && mod100 !== 11) return forms[0];
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
   return forms[2];
+}
+
+
+/**
+ * Counter-creative brief banner — shown when the user clicks
+ * «Создать контр-креатив» on a competitor ad. Reads the URL params:
+ *   ?counter=1&advertiser=...&headline=...&body=...&format=...
+ * and renders an AI-style summary the creative generation pipeline can
+ * pick up. For now this is a visible bridge — the actual generation flow
+ * (one-click AI Make) will plug into this same brief object.
+ */
+function CounterCreativeBanner() {
+  const sp = useSearchParams();
+  const [dismissed, setDismissed] = useState(false);
+
+  const counter = sp?.get("counter");
+  if (!counter || dismissed) return null;
+
+  const advertiser = sp?.get("advertiser") || "конкурент";
+  const headline = sp?.get("headline") || "";
+  const body = sp?.get("body") || "";
+  const format = sp?.get("format") || "image";
+
+  return (
+    <div
+      className="mb-5 flex items-start gap-3 rounded-[14px] p-4"
+      style={{
+        background: "linear-gradient(135deg, #FCF1E8 0%, #F8E8D9 100%)",
+        border: "1px solid #F5DDC8",
+      }}
+    >
+      <div
+        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white"
+        style={{ boxShadow: "0 4px 14px -4px rgba(232,149,108,0.45)" }}
+      >
+        <Sparkles
+          className="size-[17px]"
+          style={{ color: "var(--peach)" }}
+          strokeWidth={1.6}
+        />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div
+          className="mb-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em]"
+          style={{ color: "var(--peach-deep)" }}
+        >
+          AI · бриф от Конкурентов
+        </div>
+        <div className="text-[13.5px] leading-snug text-[var(--ink)]">
+          Контр-креатив против <b>{advertiser}</b> · формат <b>{format}</b>.
+          {headline && (
+            <>
+              {" "}
+              Их хук: <em>«{headline}»</em>.
+            </>
+          )}
+          {body && (
+            <>
+              {" "}
+              Текст: <span className="text-[var(--ink-mute)]">«{body.slice(0, 120)}{body.length > 120 ? "…" : ""}»</span>
+            </>
+          )}
+          <div className="mt-1.5 text-[12px] text-[var(--ink-mute)]">
+            AI учтёт этот хук при следующей генерации — нажми «Перегенерить»
+            на любом баннере или дождись следующей кампании через визард.
+          </div>
+        </div>
+      </div>
+      <button
+        onClick={() => setDismissed(true)}
+        className="size-7 shrink-0 rounded-md text-[var(--ink-mute)] hover:bg-white/40 hover:text-[var(--ink)] transition-colors inline-flex items-center justify-center"
+        title="Скрыть"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  );
 }

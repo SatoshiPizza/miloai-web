@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Inbox as InboxIcon, Sparkles, Phone, Mail, Check, ArrowRight, Plus,
-  Loader2,
+  Loader2, MessageSquare, MessagesSquare, Send, Copy,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,7 @@ export default function InboxPage() {
   const [wonOpen, setWonOpen] = useState<Lead | null>(null);
   const [lostOpen, setLostOpen] = useState<Lead | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
+  const [replyOpen, setReplyOpen] = useState<Lead | null>(null);
 
   // Initial load.
   useEffect(() => {
@@ -163,6 +164,7 @@ export default function InboxPage() {
             onOpenWon={(l) => setWonOpen(l)}
             onOpenLost={(l) => setLostOpen(l)}
             onReopen={(l) => setStatus(l, "new")}
+            onWriteReply={(l) => setReplyOpen(l)}
           />
         ))}
       </div>
@@ -198,6 +200,19 @@ export default function InboxPage() {
           await refresh();
         }}
       />
+
+      {/* Reply dialog — opens from LeadCard's "Написать" */}
+      <ReplyDialog
+        lead={replyOpen}
+        onClose={() => setReplyOpen(null)}
+        onSent={async () => {
+          if (replyOpen && replyOpen.status === "new") {
+            // Auto-promote new → contacted once user actually reached out.
+            await setStatus(replyOpen, "contacted");
+          }
+          setReplyOpen(null);
+        }}
+      />
     </div>
   );
 }
@@ -227,7 +242,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function KanbanColumn({
   col, leads, loading, hasMetaActive, busy,
-  onMarkContacted, onOpenWon, onOpenLost, onReopen,
+  onMarkContacted, onOpenWon, onOpenLost, onReopen, onWriteReply,
 }: {
   col: (typeof COLUMNS)[number];
   leads: Lead[];
@@ -238,6 +253,7 @@ function KanbanColumn({
   onOpenWon: (l: Lead) => void;
   onOpenLost: (l: Lead) => void;
   onReopen: (l: Lead) => void;
+  onWriteReply: (l: Lead) => void;
 }) {
   return (
     <div
@@ -273,6 +289,7 @@ function KanbanColumn({
               onOpenWon={() => onOpenWon(l)}
               onOpenLost={() => onOpenLost(l)}
               onReopen={() => onReopen(l)}
+              onWriteReply={() => onWriteReply(l)}
             />
           ))
         )}
@@ -287,7 +304,7 @@ function KanbanColumn({
 // ═════════════════════════════════════════════════════════════════════════════
 
 function LeadCard({
-  lead, busy, status, onMarkContacted, onOpenWon, onOpenLost, onReopen,
+  lead, busy, status, onMarkContacted, onOpenWon, onOpenLost, onReopen, onWriteReply,
 }: {
   lead: Lead;
   busy: boolean;
@@ -296,6 +313,7 @@ function LeadCard({
   onOpenWon: () => void;
   onOpenLost: () => void;
   onReopen: () => void;
+  onWriteReply: () => void;
 }) {
   const initials = (lead.name || "?")
     .trim()
@@ -369,6 +387,17 @@ function LeadCard({
           {timeAgo(lead.created_at)}
         </span>
         {busy && <Loader2 className="size-3 animate-spin text-[var(--ink-subtle)]" />}
+        {(status === "new" || status === "contacted") && (
+          <button
+            onClick={onWriteReply}
+            disabled={busy}
+            className="rounded-md border px-2 py-1 text-[11.5px] font-medium text-[var(--ink-mute)] inline-flex items-center gap-1 hover:text-[var(--ink)] disabled:opacity-50"
+            style={{ borderColor: "var(--border)" }}
+            title="Открыть AI-черновик ответа и переслать в WhatsApp / email"
+          >
+            <MessageSquare className="size-3" /> Написать
+          </button>
+        )}
         {status === "new" && (
           <button
             onClick={onMarkContacted}
@@ -744,3 +773,154 @@ function label(status: LeadStatus): string {
 
 // Silence unused imports under some configurations.
 void Mail;
+void MessagesSquare;
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Reply dialog — opens from "Написать". Shows the AI-cached `ai_response`
+// (or a fallback template) in an editable textarea + three send channels
+// the lead actually came through: WhatsApp, email, or copy-to-clipboard.
+//
+// We deliberately don't push messages from the server here — the lead's
+// own phone/email is what the user contacts FROM their own client. The
+// modal's job is to (a) compose the message with AI's help, (b) deeplink
+// into the right channel, (c) mark the lead as `contacted` once sent.
+// ═════════════════════════════════════════════════════════════════════════════
+
+
+function ReplyDialog({
+  lead,
+  onClose,
+  onSent,
+}: {
+  lead: Lead | null;
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const [text, setText] = useState("");
+
+  useEffect(() => {
+    if (!lead) return;
+    // Seed the textarea with the cached AI response — or a polite Russian
+    // fallback when none is present (manual leads, older webhook payloads).
+    const seed =
+      lead.ai_response?.trim() ||
+      `Здравствуйте${lead.name ? `, ${lead.name.split(/\s+/)[0]}` : ""}!\n\n` +
+        `Спасибо за обращение. Подскажите, когда удобно созвониться?\n\n` +
+        `С уважением,\nкоманда поддержки.`;
+    setText(seed);
+  }, [lead]);
+
+  if (!lead) return null;
+
+  const phoneDigits = (lead.phone || "").replace(/[^\d]/g, "");
+  const waUrl = phoneDigits
+    ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`
+    : null;
+  const mailUrl = lead.email
+    ? `mailto:${lead.email}?body=${encodeURIComponent(text)}&subject=${encodeURIComponent(
+        "Ответ на вашу заявку",
+      )}`
+    : null;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Скопировано в буфер");
+    } catch {
+      toast.error("Не удалось скопировать");
+    }
+  }
+
+  return (
+    <Dialog open={!!lead} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Ответить · {lead.name || "Без имени"}</DialogTitle>
+          <DialogDescription>
+            {lead.phone && <span className="font-mono">{lead.phone}</span>}
+            {lead.phone && lead.email && " · "}
+            {lead.email && <span className="font-mono">{lead.email}</span>}
+            {!lead.phone && !lead.email && "контакт не указан"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          {lead.ai_response && (
+            <div
+              className="flex items-center gap-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em]"
+              style={{ color: "var(--peach-deep)" }}
+            >
+              <Sparkles className="size-3" /> AI-черновик · отредактируй и отправь
+            </div>
+          )}
+          <textarea
+            rows={7}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="w-full resize-none rounded-[10px] border bg-[var(--card-soft)] px-3.5 py-3 text-[14px] outline-none"
+            style={{ borderColor: "var(--border)", color: "var(--ink)" }}
+          />
+
+          <div className="grid grid-cols-3 gap-2">
+            <a
+              href={waUrl ?? undefined}
+              target={waUrl ? "_blank" : undefined}
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                if (!waUrl) {
+                  e.preventDefault();
+                  toast.info("У лида нет телефона");
+                  return;
+                }
+                onSent();
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md py-2 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
+              style={{
+                background: waUrl ? "#25D366" : "var(--card-soft)",
+                color: waUrl ? "#fff" : "var(--ink-subtle)",
+                pointerEvents: waUrl ? "auto" : "none",
+              }}
+              title={waUrl ? "Открыть WhatsApp" : "Нет телефона"}
+            >
+              <Send className="size-3.5" /> WhatsApp
+            </a>
+            <a
+              href={mailUrl ?? undefined}
+              onClick={(e) => {
+                if (!mailUrl) {
+                  e.preventDefault();
+                  toast.info("У лида нет email");
+                  return;
+                }
+                onSent();
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md py-2 text-[12.5px] font-medium transition-opacity hover:opacity-90"
+              style={{
+                background: mailUrl ? "var(--ink)" : "var(--card-soft)",
+                color: mailUrl ? "#fff" : "var(--ink-subtle)",
+                pointerEvents: mailUrl ? "auto" : "none",
+              }}
+              title={mailUrl ? "Открыть email" : "Нет email"}
+            >
+              <Mail className="size-3.5" /> Email
+            </a>
+            <button
+              onClick={copy}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border py-2 text-[12.5px] font-medium text-[var(--ink-mute)] hover:text-[var(--ink)] transition-colors"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <Copy className="size-3.5" /> Скопировать
+            </button>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Закрыть
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
