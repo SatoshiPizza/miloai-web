@@ -7,6 +7,7 @@ import { Image as ImageIcon, Sparkles, X } from "lucide-react";
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
 import { tgBridge, type ServiceSummary, type ServiceBannerPreview } from "@/lib/tg-bridge";
 import { toast } from "sonner";
+import { EmptyState as SharedEmptyState } from "@/components/empty-state";
 
 /**
  * Creatives gallery — design handoff iter-2 §screen-creatives.jsx.
@@ -276,18 +277,38 @@ function FilterGroup({
 // ═════════════════════════════════════════════════════════════════════════════
 
 function EmptyState({ hasAny }: { hasAny: boolean }) {
+  if (hasAny) {
+    return (
+      <div className="rounded-[14px] border border-[var(--border)] bg-card px-6 py-12 text-center">
+        <ImageIcon className="size-10 mx-auto mb-3 text-[var(--ink-subtle)]/50" />
+        <p className="text-sm font-medium text-[var(--ink)]">
+          Под фильтр ничего не подходит.
+        </p>
+        <p className="text-xs text-[var(--ink-mute)] mt-1">
+          Сбрось фильтр или попробуй другую услугу.
+        </p>
+      </div>
+    );
+  }
   return (
-    <div className="rounded-[14px] border border-[var(--border)] bg-card px-6 py-12 text-center">
-      <ImageIcon className="size-10 mx-auto mb-3 text-[var(--ink-subtle)]/50" />
-      <p className="text-sm font-medium text-[var(--ink)]">
-        {hasAny ? "Под фильтр ничего не подходит." : "Креативов пока нет."}
-      </p>
-      <p className="text-xs text-[var(--ink-mute)] mt-1">
-        {hasAny
-          ? "Сбрось фильтр или попробуй другую услугу."
-          : "Заполни услугу в /services — AI сгенерит баннеры автоматически."}
-      </p>
-    </div>
+    <SharedEmptyState
+      icon={ImageIcon}
+      eyebrow="Креативы"
+      title="AI готов рисовать баннеры"
+      body="Сначала нужен профиль бизнеса и хотя бы одна услуга — оттуда AI возьмёт углы, USP, фото и сгенерит баннеры под Meta и Google."
+      actions={[
+        {
+          label: "Запустить анализ",
+          href: "/onboarding",
+          primary: true,
+          icon: Sparkles,
+        },
+        {
+          label: "Заполнить услугу",
+          href: "/services",
+        },
+      ]}
+    />
   );
 }
 

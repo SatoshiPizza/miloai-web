@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmptyState as SharedEmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -283,20 +284,24 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function EmptyState() {
   return (
-    <Card>
-      <CardContent className="p-12 text-center space-y-3">
-        <FolderOpen className="size-9 mx-auto text-[var(--ink-subtle)]" strokeWidth={1.4} />
-        <h3 className="font-heading text-[18px] font-bold">Услуг пока нет</h3>
-        <p className="text-[13.5px] text-[var(--ink-mute)] max-w-md mx-auto">
-          Пройди онбординг через бота голосом (или подключи сайт) — я разберу твой бизнес и создам каталог услуг.
-        </p>
-        <Link href="/chat">
-          <Button size="lg" className="mt-2 gap-2">
-            <Sparkles className="size-4" /> Начать с AI
-          </Button>
-        </Link>
-      </CardContent>
-    </Card>
+    <SharedEmptyState
+      icon={FolderOpen}
+      eyebrow="Услуги"
+      title="AI ещё не разобрал твой бизнес"
+      body="Пройди онбординг с реальным AI-анализом сайта — за 30 секунд я вытащу услуги, цены, USP и сложу каталог."
+      actions={[
+        {
+          label: "Запустить анализ",
+          href: "/onboarding",
+          primary: true,
+          icon: Sparkles,
+        },
+        {
+          label: "Добавить вручную в чате",
+          href: "/chat",
+        },
+      ]}
+    />
   );
 }
 

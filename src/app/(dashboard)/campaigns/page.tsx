@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { tgBridge, type CampaignSummary, type CampaignTotals } from "@/lib/tg-bridge";
 import { Sparkline, fakeWeekCurve } from "@/components/sparkline";
+import { EmptyState as SharedEmptyState } from "@/components/empty-state";
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<CampaignSummary[] | null>(null);
@@ -122,20 +123,32 @@ export default function CampaignsPage() {
               <Skeleton className="h-14 w-full" />
             </div>
           ) : filtered.length === 0 ? (
-            <div className="p-12 text-sm text-muted-foreground text-center">
-              {(campaigns?.length ?? 0) === 0 ? (
-                <>
-                  <p className="font-medium text-foreground">Пока кампаний нет.</p>
-                  <p className="mt-2">
-                    Подключи Meta/Google в{" "}
-                    <Link href="/accounts" className="underline">/accounts</Link>{" "}
-                    или создай первую кампанию.
-                  </p>
-                </>
-              ) : (
+            (campaigns?.length ?? 0) === 0 ? (
+              <div className="p-6">
+                <SharedEmptyState
+                  icon={Rocket}
+                  eyebrow="Кампании"
+                  title="Здесь будут твои кампании"
+                  body="Подключи Meta и Google в онбординге — AI импортирует существующие и предложит план улучшений. Или собери первую через визард."
+                  actions={[
+                    {
+                      label: "Новая кампания",
+                      href: "/campaigns/new",
+                      primary: true,
+                      icon: Rocket,
+                    },
+                    {
+                      label: "Подключить кабинеты",
+                      href: "/accounts",
+                    },
+                  ]}
+                />
+              </div>
+            ) : (
+              <div className="p-12 text-sm text-muted-foreground text-center">
                 <p>Ничего не найдено по фильтру.</p>
-              )}
-            </div>
+              </div>
+            )
           ) : (
             <div className="divide-y">
               {filtered.map((c) => (

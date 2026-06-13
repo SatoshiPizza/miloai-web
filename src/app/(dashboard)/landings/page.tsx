@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Globe, Sparkles, Check, Settings as SettingsIcon, ExternalLink, Upload, Loader2 } from "lucide-react";
 import { tgBridge, type ServiceSummary } from "@/lib/tg-bridge";
 import { toast } from "sonner";
+import { EmptyState as SharedEmptyState } from "@/components/empty-state";
 
 /**
  * Landings page — design handoff iter-2 §screen-extras LANDINGS.
@@ -316,13 +317,24 @@ function ScoreBadge({ score }: { score: number }) {
 
 function EmptyState() {
   return (
-    <div className="rounded-[14px] border border-[var(--border)] bg-card px-6 py-12 text-center">
-      <Globe className="size-10 mx-auto mb-3 text-[var(--ink-subtle)]/50" />
-      <p className="text-sm font-medium text-[var(--ink)]">Лендингов пока нет.</p>
-      <p className="text-xs text-[var(--ink-mute)] mt-1">
-        Добавь услугу в /services — AI сгенерит лендинг автоматически.
-      </p>
-    </div>
+    <SharedEmptyState
+      icon={Globe}
+      eyebrow="Лендинги"
+      title="AI соберёт страницу под услугу"
+      body="Лендинг генерируется автоматически — структура, оффер, форма, контакты. Размещается у нас на CDN или у тебя на домене."
+      actions={[
+        {
+          label: "Запустить анализ",
+          href: "/onboarding",
+          primary: true,
+          icon: Sparkles,
+        },
+        {
+          label: "Добавить услугу",
+          href: "/services",
+        },
+      ]}
+    />
   );
 }
 
