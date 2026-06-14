@@ -7,7 +7,10 @@ import {
   Target, Phone, BadgeEuro, LayoutGrid as Grid,
 } from "lucide-react";
 import { tgBridge, type CampaignsResponse, type DashboardKpi, type ChannelsResponse } from "@/lib/tg-bridge";
-import { HeroBand, KpiStrip, type HeroStat, type Kpi } from "@/components/bold";
+import {
+  HeroBand, HeroBandSkeleton, KpiStrip, KpiStripSkeleton,
+  type HeroStat, type Kpi,
+} from "@/components/bold";
 
 /**
  * Analytics — design handoff §screen-analytics.jsx.
@@ -51,16 +54,20 @@ export default function AnalyticsPage() {
   return (
     <div className="mx-auto max-w-[1400px]">
       {/* Bold hero with the benchmark verdict + CPL stat */}
-      <HeroBand
-        eyebrow={hero.eyebrow}
-        title={hero.title}
-        body={hero.body}
-        stat={hero.stat}
-      />
+      {loading ? (
+        <HeroBandSkeleton />
+      ) : (
+        <HeroBand
+          eyebrow={hero.eyebrow}
+          title={hero.title}
+          body={hero.body}
+          stat={hero.stat}
+        />
+      )}
 
       <div className="px-7 pb-10">
         {/* Editorial KPI strip */}
-        <KpiStrip kpis={cells} />
+        {loading ? <KpiStripSkeleton /> : <KpiStrip kpis={cells} />}
 
         {/* Period selector — moved below the strip so it sits with the data sections */}
         <div className="mt-6">

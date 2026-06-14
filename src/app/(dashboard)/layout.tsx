@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/sidebar";
 import { MobileNav } from "@/components/mobile-nav";
 import { SessionGuard } from "@/components/session-guard";
+import { AnomalyBell } from "@/components/anomaly-bell";
 
 export default function DashboardLayout({
   children,
@@ -15,6 +16,7 @@ export default function DashboardLayout({
           <MobileNav />
           {children}
         </main>
+        <AnomalyBell />
       </div>
     </SessionGuard>
   );

@@ -1,0 +1,18 @@
+/**
+ * Sentry server-side config (Next.js route handlers / RSC).
+ *
+ * The token is server-only so we use SENTRY_DSN, not NEXT_PUBLIC_SENTRY_DSN.
+ * Same no-op-without-DSN posture as the client config.
+ */
+import * as Sentry from "@sentry/nextjs";
+
+const dsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+if (dsn) {
+  Sentry.init({
+    dsn,
+    tracesSampleRate: 0.1,
+    environment: process.env.VERCEL_ENV || "local",
+    sendDefaultPii: false,
+  });
+}

@@ -10,8 +10,10 @@
 
 export { HeroBand } from "./hero-band";
 export type { HeroAction, HeroStat } from "./hero-band";
+export { HeroBandSkeleton } from "./hero-band-skeleton";
 export { KpiStrip } from "./kpi-strip";
 export type { Kpi } from "./kpi-strip";
+export { KpiStripSkeleton } from "./kpi-strip-skeleton";
 export { AiPanel, AiRec } from "./ai-panel";
 export { MiniSpark } from "./mini-spark";
 export { sparkPath } from "./spark-path";

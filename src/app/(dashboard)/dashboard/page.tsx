@@ -15,7 +15,9 @@ import { tgBridge, type DashboardKpi, type CampaignSummary, type Me } from "@/li
 import { AiChatMini } from "@/components/ai-chat-mini";
 import { Sparkline, fakeWeekCurve } from "@/components/sparkline";
 import { PlatformBadge } from "@/components/platform-badge";
-import { HeroBand, KpiStrip, type Kpi } from "@/components/bold";
+import {
+  HeroBand, HeroBandSkeleton, KpiStrip, KpiStripSkeleton, type Kpi,
+} from "@/components/bold";
 
 
 /** Time-of-day greeting in the user's language. */
@@ -79,24 +81,28 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-[1400px]">
       {/* Bold command hero — single dominant AI insight + topline stat */}
-      <HeroBand
-        eyebrow={hero.eyebrow}
-        title={hero.title}
-        body={hero.body}
-        actions={[
-          {
-            label: "Новая кампания",
-            primary: true,
-            href: "/campaigns/new",
-            icon: <Rocket className="size-[14px]" />,
-          },
-        ]}
-        stat={hero.stat}
-      />
+      {loading ? (
+        <HeroBandSkeleton />
+      ) : (
+        <HeroBand
+          eyebrow={hero.eyebrow}
+          title={hero.title}
+          body={hero.body}
+          actions={[
+            {
+              label: "Новая кампания",
+              primary: true,
+              href: "/campaigns/new",
+              icon: <Rocket className="size-[14px]" />,
+            },
+          ]}
+          stat={hero.stat}
+        />
+      )}
 
       <div className="px-6 pb-10 lg:px-8">
         {/* Editorial KPI strip — overlaps the hero by -18 */}
-        <KpiStrip kpis={kpiCells} />
+        {loading ? <KpiStripSkeleton /> : <KpiStrip kpis={kpiCells} />}
 
         {error && (
           <div className="mt-6 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
