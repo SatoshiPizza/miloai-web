@@ -20,16 +20,17 @@ import { LinkedIdentitiesBlock } from "@/components/linked-identities";
  * Backend endpoints for editing not shipped yet — render read-only views.
  */
 
-type TabKey = "profile" | "logins" | "goals" | "billing" | "team" | "api" | "notifications";
+// Surface only the tabs that are actually wired. Notifications / API keys /
+// Team had "Скоро" placeholders — confusing for the user since the rest of
+// the app works. They'll come back when there's real implementation behind
+// them (webhook-token gen, in-app notification rules, agency seat invites).
+type TabKey = "profile" | "logins" | "goals" | "billing";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "profile",       label: "Профиль" },
   { key: "logins",        label: "Логин" },
   { key: "goals",         label: "Цели" },
   { key: "billing",       label: "Биллинг" },
-  { key: "team",          label: "Команда" },
-  { key: "api",           label: "API ключи" },
-  { key: "notifications", label: "Уведомления" },
 ];
 
 export default function SettingsPage() {
@@ -104,9 +105,6 @@ export default function SettingsPage() {
         {active === "logins" && <LinkedIdentitiesBlock />}
         {active === "goals" && <GoalsTab kpi={kpi} loading={loading} />}
         {active === "billing" && <BillingTab />}
-        {active === "team" && <PlaceholderBlock title="Команда" body="Управляй приглашениями и ролями на странице /accounts." />}
-        {active === "api" && <PlaceholderBlock title="API ключи" body="Скоро: генерация webhook-токенов для CRM, экспорт лидов." />}
-        {active === "notifications" && <PlaceholderBlock title="Уведомления" body="Скоро: настройка триггеров — какие изменения слать в Telegram." />}
       </div>
     </div>
   );
@@ -438,21 +436,6 @@ function formatDate(iso: string): string {
     return iso;
   }
 }
-
-function PlaceholderBlock({ title, body }: { title: string; body: string }) {
-  return (
-    <SettingsBlock title={title} subtitle="">
-      <div
-        className="rounded-[11px] border border-dashed border-[var(--border)] px-4 py-8 text-center"
-        style={{ background: "var(--card-soft)" }}
-      >
-        <Sparkles className="size-5 mx-auto mb-2 text-[var(--peach)]" strokeWidth={1.7} />
-        <p className="text-[12.5px] text-[var(--ink-mute)] max-w-md mx-auto leading-relaxed">{body}</p>
-      </div>
-    </SettingsBlock>
-  );
-}
-
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Building blocks
