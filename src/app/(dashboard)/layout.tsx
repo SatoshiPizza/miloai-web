@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/sidebar";
+import { MobileNav } from "@/components/mobile-nav";
 import { SessionGuard } from "@/components/session-guard";
 
 export default function DashboardLayout({
@@ -10,7 +11,10 @@ export default function DashboardLayout({
     <SessionGuard>
       <div className="flex min-h-screen">
         <Sidebar />
-        <main className="flex-1 min-w-0">{children}</main>
+        <main className="flex-1 min-w-0">
+          <MobileNav />
+          {children}
+        </main>
       </div>
     </SessionGuard>
   );
