@@ -79,7 +79,7 @@ export function LinkedIdentitiesBlock() {
           Подключенные аккаунты
         </h2>
         <p className="text-[12.5px] text-[var(--ink-mute)] mt-1 leading-relaxed">
-          Несколько способов войти в один и тот же аккаунт MiloAI. Можно подключить Telegram + Google + Email — все будут вести в одну сессию.
+          Несколько способов войти в один и тот же аккаунт UniAds. Можно подключить Telegram + Google + Email — все будут вести в одну сессию.
         </p>
       </div>
 

@@ -122,14 +122,14 @@ export function Sidebar() {
         </button>
       )}
 
-      {/* MiloAI brand at the bottom — secondary to the business identity */}
+      {/* UniAds brand at the bottom — secondary to the business identity */}
       <div
         className="flex items-center gap-2 px-4 py-2.5"
         style={{ opacity: 0.55 }}
       >
         <SparkleLogo size={14} />
         <div className="font-heading text-[12px] font-bold tracking-tight text-foreground">
-          MiloAI
+          UniAds
         </div>
         <div className="ml-auto font-mono text-[9.5px] text-[var(--ink-subtle)]">
           v0.1{process.env.NEXT_PUBLIC_API_URL ? "" : "·dev"}

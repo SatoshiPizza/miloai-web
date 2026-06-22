@@ -67,7 +67,7 @@ export function OnbFrame({
             strokeWidth={1.6}
           />
           <span className="font-heading text-[18px] font-bold tracking-[-0.02em]">
-            MiloAI
+            UniAds
           </span>
         </Link>
 

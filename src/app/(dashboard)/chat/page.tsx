@@ -79,7 +79,7 @@ export default function ChatPage() {
       {/* Dark vertical rail — replaces the compact HeroBand */}
       <ChatRail
         paired={paired}
-        botUsername={me?.telegram_username ?? "miloai_bot"}
+        botUsername={me?.telegram_username ?? "miloailevbot"}
         messagesThisWeek={messages.length}
         voiceCommands={voiceCommands}
         avgResponseSec={1.8}
@@ -249,7 +249,7 @@ function Bubble({ msg, initials }: { msg: WebMessage; initials: string }) {
       <Avatar variant="bot" />
       <div className="max-w-[78%]">
         <div className="flex items-baseline gap-2 mb-1">
-          <span className="text-[12.5px] font-semibold text-[var(--ink)]">MiloAI</span>
+          <span className="text-[12.5px] font-semibold text-[var(--ink)]">UniAds</span>
           <span className="font-mono text-[10.5px] text-[var(--ink-subtle)]">{time}</span>
         </div>
         <div
@@ -350,7 +350,7 @@ function TelegramPreview({ messages, paired }: { messages: WebMessage[]; paired:
           <Sparkles className="size-4 text-white" strokeWidth={1.7} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[13.5px] font-semibold text-[var(--ink)] truncate">MiloAI Bot</div>
+          <div className="text-[13.5px] font-semibold text-[var(--ink)] truncate">UniAds Bot</div>
           <div className="text-[11px]" style={{ color: paired ? "var(--sage)" : "var(--ink-subtle)" }}>
             {paired ? "в сети" : "не подключён"}
           </div>

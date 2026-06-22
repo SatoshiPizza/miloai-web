@@ -7,8 +7,8 @@
  */
 
 export const metadata = {
-  title: "Terms of Service — MiloAI",
-  description: "Terms under which MiloAI provides its AI media-buyer service.",
+  title: "Terms of Service — UniAds",
+  description: "Terms under which UniAds provides its AI media-buyer service.",
 };
 
 export default function TermsPage() {
@@ -23,13 +23,13 @@ export default function TermsPage() {
 
       <Section title="1. Acceptance">
         <p>
-          By creating an account or using MiloAI (the &quot;Service&quot;) you agree to these Terms of Service and our <a href="/privacy">Privacy Policy</a>. If you don&apos;t agree, don&apos;t use the Service.
+          By creating an account or using UniAds (the &quot;Service&quot;) you agree to these Terms of Service and our <a href="/privacy">Privacy Policy</a>. If you don&apos;t agree, don&apos;t use the Service.
         </p>
       </Section>
 
-      <Section title="2. What MiloAI is">
+      <Section title="2. What UniAds is">
         <p>
-          MiloAI is a software-as-a-service that helps small and medium businesses manage their own Google Ads and Meta Ads campaigns through a web dashboard and a Telegram bot. We do <b>not</b> spend advertising budget on your behalf — campaigns run inside your own ad accounts using your own billing methods with Google and Meta.
+          UniAds is a software-as-a-service that helps small and medium businesses manage their own Google Ads and Meta Ads campaigns through a web dashboard and a Telegram bot. We do <b>not</b> spend advertising budget on your behalf — campaigns run inside your own ad accounts using your own billing methods with Google and Meta.
         </p>
       </Section>
 
@@ -43,10 +43,10 @@ export default function TermsPage() {
 
       <Section title="4. Your account">
         <p>
-          You are responsible for keeping your login credentials secure. You may link multiple identity providers (Google, Telegram, email) to a single MiloAI account. Sharing one account between several humans is allowed for organisations; we may add proper multi-seat support later.
+          You are responsible for keeping your login credentials secure. You may link multiple identity providers (Google, Telegram, email) to a single UniAds account. Sharing one account between several humans is allowed for organisations; we may add proper multi-seat support later.
         </p>
         <p>
-          You can delete your account at any time from Settings → Account, or by emailing <a href="mailto:hello@miloai.ee">hello@miloai.ee</a>. See <a href="/privacy">Privacy Policy §7</a> for what happens to your data on deletion.
+          You can delete your account at any time from Settings → Account, or by emailing <a href="mailto:info@uniads.eu">info@uniads.eu</a>. See <a href="/privacy">Privacy Policy §7</a> for what happens to your data on deletion.
         </p>
       </Section>
 
@@ -77,7 +77,7 @@ export default function TermsPage() {
         <p>All payments are processed by Stripe. You authorise us to charge your payment method monthly on the same calendar date as your initial subscription. Failed payments enter a 3-day grace period; after that we downgrade you to Free.</p>
 
         <h3>6.3 Refunds</h3>
-        <p>We do not provide refunds for partial months. If you cancel mid-month, you keep paid features until the end of the current billing period and are not charged again. If you believe you were billed in error, email <a href="mailto:hello@miloai.ee">hello@miloai.ee</a> within 30 days and we&apos;ll review case by case.</p>
+        <p>We do not provide refunds for partial months. If you cancel mid-month, you keep paid features until the end of the current billing period and are not charged again. If you believe you were billed in error, email <a href="mailto:info@uniads.eu">info@uniads.eu</a> within 30 days and we&apos;ll review case by case.</p>
 
         <h3>6.4 Cancellation</h3>
         <p>Cancel any time from Settings → Billing → Stripe Portal. No retention call, no questionnaire.</p>
@@ -138,7 +138,7 @@ export default function TermsPage() {
 
       <Section title="13. Indemnity">
         <p>
-          You agree to indemnify MiloAI against claims arising from your violation of these Terms, your ad content, your use of third-party services through us, or your infringement of someone else&apos;s rights.
+          You agree to indemnify UniAds against claims arising from your violation of these Terms, your ad content, your use of third-party services through us, or your infringement of someone else&apos;s rights.
         </p>
       </Section>
 
@@ -150,13 +150,13 @@ export default function TermsPage() {
 
       <Section title="15. Governing law">
         <p>
-          These Terms are governed by the laws of Estonia. Disputes that cannot be resolved through good-faith discussion (email <a href="mailto:hello@miloai.ee">hello@miloai.ee</a>) will be brought before the courts of Harju County, Estonia. EU consumers retain the right to bring action in their country of residence under applicable consumer-protection law.
+          These Terms are governed by the laws of Estonia. Disputes that cannot be resolved through good-faith discussion (email <a href="mailto:info@uniads.eu">info@uniads.eu</a>) will be brought before the courts of Harju County, Estonia. EU consumers retain the right to bring action in their country of residence under applicable consumer-protection law.
         </p>
       </Section>
 
       <Section title="16. Contact">
         <p>
-          Questions about these Terms: <a href="mailto:hello@miloai.ee">hello@miloai.ee</a>
+          Questions about these Terms: <a href="mailto:info@uniads.eu">info@uniads.eu</a>
         </p>
       </Section>
     </article>

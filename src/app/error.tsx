@@ -79,11 +79,11 @@ export default function GlobalError({
           Мы уже знаем — ошибка ушла в логи с трассой. Попробуй обновить
           страницу. Если повторится — напиши{" "}
           <a
-            href="mailto:hello@miloai.ee"
+            href="mailto:info@uniads.eu"
             className="underline transition-opacity hover:opacity-80"
             style={{ color: "var(--peach)" }}
           >
-            hello@miloai.ee
+            info@uniads.eu
           </a>
           .
         </p>

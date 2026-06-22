@@ -21,7 +21,7 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
-  title: "MiloAI — AI media buyer for SMB",
+  title: "UniAds — AI media buyer for SMB",
   description:
     "Voice-first AI media buyer. Replaces a local agency: launches Meta & Google campaigns from one voice message, audits before spend, and tracks live performance.",
 };

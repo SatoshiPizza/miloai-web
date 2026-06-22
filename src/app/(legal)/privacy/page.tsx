@@ -12,8 +12,8 @@
  */
 
 export const metadata = {
-  title: "Privacy Policy — MiloAI",
-  description: "How MiloAI collects, uses, and protects your data.",
+  title: "Privacy Policy — UniAds",
+  description: "How UniAds collects, uses, and protects your data.",
 };
 
 export default function PrivacyPage() {
@@ -28,10 +28,10 @@ export default function PrivacyPage() {
 
       <Section title="1. Who we are">
         <p>
-          MiloAI (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) is an AI media-buyer software-as-a-service operated by an independent founder based in Estonia. We help small and medium businesses launch and manage their own Google Ads and Meta Ads campaigns through a web dashboard and a Telegram bot.
+          UniAds (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) is an AI media-buyer software-as-a-service operated by an independent founder based in Estonia. We help small and medium businesses launch and manage their own Google Ads and Meta Ads campaigns through a web dashboard and a Telegram bot.
         </p>
         <p>
-          Contact: <a href="mailto:hello@miloai.ee">hello@miloai.ee</a>
+          Contact: <a href="mailto:info@uniads.eu">info@uniads.eu</a>
         </p>
       </Section>
 
@@ -158,14 +158,14 @@ export default function PrivacyPage() {
           <li>Withdraw consent for AI processing (this will disable AI-powered features but keep your account active)</li>
           <li>Lodge a complaint with the Estonian Data Protection Inspectorate (<a href="https://www.aki.ee" target="_blank" rel="noopener noreferrer">aki.ee</a>)</li>
         </ul>
-        <p>To exercise any of these rights, email <a href="mailto:hello@miloai.ee">hello@miloai.ee</a> from the email associated with your account. We respond within 30 days.</p>
+        <p>To exercise any of these rights, email <a href="mailto:info@uniads.eu">info@uniads.eu</a> from the email associated with your account. We respond within 30 days.</p>
       </Section>
 
       <Section title="7. Data deletion">
         <p>You can delete your account at any time:</p>
         <ul>
           <li>From inside the app: Settings → Account → Delete account</li>
-          <li>By email: send a deletion request to <a href="mailto:hello@miloai.ee">hello@miloai.ee</a></li>
+          <li>By email: send a deletion request to <a href="mailto:info@uniads.eu">info@uniads.eu</a></li>
         </ul>
         <p>Upon deletion we immediately purge: your user row, business profile, conversations, OAuth tokens, leads, creatives, and connected ad-account metadata. Encrypted backups are retained for up to 30 days for disaster recovery, then permanently deleted. We retain anonymised billing records for 7 years as required by Estonian tax law.</p>
         <p>Disconnecting an ad platform from /accounts also revokes the OAuth token and removes the stored tokens immediately.</p>
@@ -181,7 +181,7 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="9. Children">
-        <p>MiloAI is intended for business users aged 18 or over. We do not knowingly collect personal data from anyone under 16. If you believe a child has provided us with personal data, contact us and we will delete it.</p>
+        <p>UniAds is intended for business users aged 18 or over. We do not knowingly collect personal data from anyone under 16. If you believe a child has provided us with personal data, contact us and we will delete it.</p>
       </Section>
 
       <Section title="10. Changes to this policy">
@@ -191,7 +191,7 @@ export default function PrivacyPage() {
       <Section title="11. Contact">
         <p>
           Privacy questions, data requests, or complaints:{" "}
-          <a href="mailto:hello@miloai.ee">hello@miloai.ee</a>
+          <a href="mailto:info@uniads.eu">info@uniads.eu</a>
         </p>
       </Section>
     </article>

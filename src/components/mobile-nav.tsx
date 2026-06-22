@@ -114,7 +114,7 @@ export function MobileNav() {
             style={{ color: "var(--peach)" }}
           />
           <span className="font-heading text-[17px] font-bold tracking-[-0.018em] text-[var(--ink)]">
-            MiloAI
+            UniAds
           </span>
         </Link>
 
@@ -160,7 +160,7 @@ export function MobileNav() {
                 style={{ color: "var(--peach)" }}
               />
               <span className="font-heading text-[17px] font-bold tracking-[-0.018em] text-[var(--ink)]">
-                MiloAI
+                UniAds
               </span>
               <div className="flex-1" />
               <button

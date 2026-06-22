@@ -111,7 +111,7 @@ function Header() {
             className="font-heading text-[20px] font-bold tracking-tight"
             style={{ color: "var(--hero-cream)" }}
           >
-            MiloAI
+            UniAds
           </span>
         </a>
         <nav
@@ -209,7 +209,7 @@ function Pitch() {
         className="mt-12 hidden font-mono text-[11px] tracking-wider lg:flex lg:gap-5"
         style={{ color: "var(--hero-cream-45)" }}
       >
-        <span>© 2026 MiloAI OÜ</span>
+        <span>© 2026 UniAds OÜ</span>
         <span>Tallinn, EE</span>
       </p>
     </div>
@@ -917,7 +917,7 @@ function LandingFooter() {
             style={{ color: "var(--peach)" }}
           />
           <span className="font-heading text-[18px] font-bold tracking-[-0.02em] text-[var(--ink)]">
-            MiloAI
+            UniAds
           </span>
         </a>
         <nav className="flex flex-wrap gap-5 text-[13.5px] text-[var(--ink-mute)]">
@@ -930,15 +930,15 @@ function LandingFooter() {
         </nav>
         <div className="flex-1" />
         <div className="flex items-center gap-3 font-mono text-[11px] text-[var(--ink-subtle)]">
-          <span>© 2026 MiloAI OÜ</span>
+          <span>© 2026 UniAds OÜ</span>
           <span>·</span>
           <span>Tallinn, EE</span>
           <span>·</span>
           <a
-            href="mailto:hello@miloai.ee"
+            href="mailto:info@uniads.eu"
             className="hover:text-[var(--ink-mute)] transition-colors"
           >
-            hello@miloai.ee
+            info@uniads.eu
           </a>
         </div>
       </div>
