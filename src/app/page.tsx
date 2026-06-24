@@ -249,11 +249,14 @@ function Proof({
 // ═════════════════════════════════════════════════════════════════════════════
 
 function AuthCard() {
-  const router = useRouter();
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Magic-link UX: after request succeeds we hide the form and show a
+  // "Check your inbox" panel. User stays on this card; clicking the link
+  // in their email opens /auth/verify which exchanges token → session.
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   async function submitEmail() {
     const e = email.trim().toLowerCase();
@@ -264,24 +267,12 @@ function AuthCard() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.post<{
-        token: string;
-        user_id: number;
-        email: string;
-        first_name: string | null;
-      }>("/api/auth/email-login", { email: e });
-      saveSession({
-        token: res.token,
-        user_id: res.user_id,
-        telegram_id: 0,
-        first_name: res.first_name,
-        username: null,
-        email: res.email,
-      });
-      router.replace("/dashboard");
+      await api.post<{ sent: boolean }>("/api/auth/email/request", { email: e });
+      setSentTo(e);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Не удалось войти";
+      const msg = err instanceof Error ? err.message : "Не удалось отправить ссылку";
       setError(msg);
+    } finally {
       setBusy(false);
     }
   }
@@ -332,61 +323,92 @@ function AuthCard() {
         </div>
 
         <h2 className="font-heading text-[24px] font-bold tracking-[-0.022em] text-[var(--ink)]">
-          {tab === "login" ? "С возвращением." : "Добро пожаловать."}
+          {sentTo
+            ? "Проверь почту."
+            : tab === "login" ? "С возвращением." : "Добро пожаловать."}
         </h2>
         <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--ink-mute)]">
-          {tab === "login"
-            ? "Войди и проверь, что AI делал, пока тебя не было."
-            : "Заводи аккаунт за 10 секунд. Без паролей, без верификации карты."}
+          {sentTo
+            ? <>Кинули ссылку на <b className="text-[var(--ink)]">{sentTo}</b>. Открой её в течение 15 минут — войдёшь автоматически.</>
+            : tab === "login"
+              ? "Войди и проверь, что AI делал, пока тебя не было."
+              : "Заводи аккаунт за 10 секунд. Без паролей, без верификации карты."}
         </p>
 
-        {/* Email field */}
-        <label className="mt-5 block text-[12px] font-medium text-[var(--ink-mute)]">
-          Email
-        </label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submitEmail()}
-          placeholder="vällu@vallu.ee"
-          className="mt-1.5 w-full rounded-[10px] px-3.5 py-3 text-[14px] outline-none transition-colors"
-          style={{
-            background: "var(--card)",
-            border: `1.5px solid ${
-              error
-                ? "var(--destructive)"
-                : email
-                  ? "var(--peach)"
-                  : "var(--border)"
-            }`,
-            boxShadow: email && !error
-              ? "0 0 0 4px rgba(232,149,108,0.1)"
-              : undefined,
-            color: "var(--ink)",
-          }}
-        />
-
-        <button
-          onClick={submitEmail}
-          disabled={busy || !email.trim()}
-          className="mt-3.5 inline-flex w-full items-center justify-center gap-2 rounded-[10px] py-3 text-[14px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          style={{ background: "var(--ink)" }}
-        >
-          {busy && <Loader2 className="size-4 animate-spin" />}
-          {tab === "login" ? "Прислать magic-ссылку" : "Создать аккаунт"}
-          {!busy && (
-            <ArrowRight
-              className="size-3.5"
-              style={{ color: "var(--peach)" }}
-            />
-          )}
-        </button>
-
-        {error && (
-          <div className="mt-3 rounded-[10px] border border-[#E9C4B5] bg-[#F8DDD0] px-3 py-2 text-[12.5px] text-[var(--destructive)]">
-            {error}
+        {sentTo ? (
+          <div className="mt-6 rounded-[12px] border border-[var(--border)] bg-[var(--card-soft)] p-4">
+            <div className="flex items-start gap-3">
+              <div
+                className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
+                style={{ background: "var(--peach-wash)" }}
+              >
+                <Sparkles className="size-4" style={{ color: "var(--peach)" }} />
+              </div>
+              <div className="flex-1 text-[12.5px] leading-relaxed text-[var(--ink-mute)]">
+                Письмо приходит за 5–30 секунд. Не нашёл — проверь спам, или{" "}
+                <button
+                  type="button"
+                  onClick={() => { setSentTo(null); setError(null); }}
+                  className="font-medium underline transition-opacity hover:opacity-70"
+                  style={{ color: "var(--peach-deep)" }}
+                >
+                  отправь ещё раз
+                </button>
+                .
+              </div>
+            </div>
           </div>
+        ) : (
+          <>
+            {/* Email field */}
+            <label className="mt-5 block text-[12px] font-medium text-[var(--ink-mute)]">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submitEmail()}
+              placeholder="vällu@vallu.ee"
+              className="mt-1.5 w-full rounded-[10px] px-3.5 py-3 text-[14px] outline-none transition-colors"
+              style={{
+                background: "var(--card)",
+                border: `1.5px solid ${
+                  error
+                    ? "var(--destructive)"
+                    : email
+                      ? "var(--peach)"
+                      : "var(--border)"
+                }`,
+                boxShadow: email && !error
+                  ? "0 0 0 4px rgba(232,149,108,0.1)"
+                  : undefined,
+                color: "var(--ink)",
+              }}
+            />
+
+            <button
+              onClick={submitEmail}
+              disabled={busy || !email.trim()}
+              className="mt-3.5 inline-flex w-full items-center justify-center gap-2 rounded-[10px] py-3 text-[14px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ background: "var(--ink)" }}
+            >
+              {busy && <Loader2 className="size-4 animate-spin" />}
+              {tab === "login" ? "Прислать magic-ссылку" : "Создать аккаунт"}
+              {!busy && (
+                <ArrowRight
+                  className="size-3.5"
+                  style={{ color: "var(--peach)" }}
+                />
+              )}
+            </button>
+
+            {error && (
+              <div className="mt-3 rounded-[10px] border border-[#E9C4B5] bg-[#F8DDD0] px-3 py-2 text-[12.5px] text-[var(--destructive)]">
+                {error}
+              </div>
+            )}
+          </>
         )}
 
         {/* OAuth divider */}
