@@ -731,6 +731,13 @@ function Pricing() {
           отмена в один клик, никакой верификации карты на Starter.
         </p>
 
+        <div className="mt-6 flex max-w-[640px] gap-2.5 rounded-[12px] border bg-[var(--card-soft)]/40 p-3.5" style={{ borderColor: "var(--border)" }}>
+          <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full" style={{ background: "var(--peach)" }} />
+          <p className="text-[12.5px] leading-relaxed text-[var(--ink-mute)]">
+            <b className="text-[var(--ink)]">UniAds — SaaS-инструмент, не агентство.</b> Рекламный бюджет ты тратишь в своих собственных Google Ads / Meta Ads кабинетах со своих карт. Мы не берём процент со spend.
+          </p>
+        </div>
+
         <div className="mt-12 grid grid-cols-1 gap-5 lg:grid-cols-3">
           {tiers.map((t, i) => (
             <PricingTier key={i} {...t} />
@@ -947,18 +954,20 @@ function LandingFooter() {
           <a href="#pricing" className="hover:text-[var(--ink)] transition-colors">Цены</a>
           <a href="#audience" className="hover:text-[var(--ink)] transition-colors">Кому подходит</a>
           <a href="#faq" className="hover:text-[var(--ink)] transition-colors">FAQ</a>
+          <a href="/about" className="hover:text-[var(--ink)] transition-colors">About</a>
           <a href="/privacy" className="hover:text-[var(--ink)] transition-colors">Privacy</a>
           <a href="/terms" className="hover:text-[var(--ink)] transition-colors">Terms</a>
         </nav>
-        <div className="flex-1" />
-        <div className="flex items-center gap-3 font-mono text-[11px] text-[var(--ink-subtle)]">
-          <span>© 2026 UniAds OÜ</span>
-          <span>·</span>
-          <span>Tallinn, EE</span>
-          <span>·</span>
+      </div>
+
+      <div className="border-t mx-auto max-w-[1320px] px-6 lg:px-12" style={{ borderColor: "var(--border)" }}>
+        <div className="py-5 font-mono text-[11px] leading-relaxed text-[var(--ink-subtle)] flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-6 lg:justify-between">
+          <div>
+            © 2026 <span className="text-[var(--ink-mute)]">Siberian OÜ</span> (reg. 16192007) · Tala tn 4, Tallinn 11415, Estonia · UniAds is a product brand operated by Siberian OÜ.
+          </div>
           <a
             href="mailto:info@uniads.eu"
-            className="hover:text-[var(--ink-mute)] transition-colors"
+            className="hover:text-[var(--ink-mute)] transition-colors shrink-0"
           >
             info@uniads.eu
           </a>

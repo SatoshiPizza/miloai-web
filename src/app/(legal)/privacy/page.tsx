@@ -28,10 +28,16 @@ export default function PrivacyPage() {
 
       <Section title="1. Who we are">
         <p>
-          UniAds (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) is an AI media-buyer software-as-a-service operated by an independent founder based in Estonia. We help small and medium businesses launch and manage their own Google Ads and Meta Ads campaigns through a web dashboard and a Telegram bot.
+          UniAds is a product brand operated by <b>Siberian OÜ</b>, an Estonian private limited company.
         </p>
+        <ul>
+          <li><b>Legal entity</b>: Siberian OÜ</li>
+          <li><b>Business registry code</b>: 16192007</li>
+          <li><b>Registered address</b>: Tala tn 4, Lasnamäe linnaosa, Tallinn 11415, Estonia</li>
+          <li><b>Contact email</b>: <a href="mailto:info@uniads.eu">info@uniads.eu</a></li>
+        </ul>
         <p>
-          Contact: <a href="mailto:info@uniads.eu">info@uniads.eu</a>
+          Throughout this Policy &quot;we&quot;, &quot;our&quot;, &quot;us&quot; refer to Siberian OÜ. We help small and medium businesses launch and manage their own Google Ads and Meta Ads campaigns through a web dashboard at uniads.eu and a Telegram bot.
         </p>
       </Section>
 

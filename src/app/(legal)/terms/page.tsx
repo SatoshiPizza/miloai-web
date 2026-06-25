@@ -23,13 +23,19 @@ export default function TermsPage() {
 
       <Section title="1. Acceptance">
         <p>
-          By creating an account or using UniAds (the &quot;Service&quot;) you agree to these Terms of Service and our <a href="/privacy">Privacy Policy</a>. If you don&apos;t agree, don&apos;t use the Service.
+          These Terms govern your use of UniAds (the &quot;Service&quot;), a product operated by <b>Siberian OÜ</b> (Estonian business registry code 16192007), Tala tn 4, Lasnamäe linnaosa, Tallinn 11415, Estonia (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;).
+        </p>
+        <p>
+          By creating an account or using the Service you agree to these Terms of Service and our <a href="/privacy">Privacy Policy</a>. If you don&apos;t agree, don&apos;t use the Service.
         </p>
       </Section>
 
       <Section title="2. What UniAds is">
         <p>
-          UniAds is a software-as-a-service that helps small and medium businesses manage their own Google Ads and Meta Ads campaigns through a web dashboard and a Telegram bot. We do <b>not</b> spend advertising budget on your behalf — campaigns run inside your own ad accounts using your own billing methods with Google and Meta.
+          UniAds is a software-as-a-service (SaaS) tool that helps small and medium businesses manage <b>their own</b> Google Ads and Meta Ads campaigns through a web dashboard at uniads.eu and a Telegram bot.
+        </p>
+        <p>
+          We do <b>not</b> spend advertising budget on your behalf. Campaigns run inside your own Google Ads and Meta Ads accounts using your own billing methods with Google and Meta. We are <b>not</b> an advertising agency and do not take a percentage of your ad spend. The subscription fee you pay is a fixed SaaS subscription billed by Siberian OÜ via Stripe.
         </p>
       </Section>
 
