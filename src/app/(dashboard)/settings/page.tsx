@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Settings as SettingsIcon, Sparkles, ExternalLink, Check, Loader2 } from "lucide-react";
+import { Settings as SettingsIcon, Sparkles, ExternalLink, Check, Loader2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   tgBridge,
@@ -129,10 +130,7 @@ function ProfileTab({ me, loading }: { me: Me | null; loading: boolean }) {
           <SettingsField label="Имя владельца" value={me?.first_name || "—"} />
           <SettingsField label="Telegram" value={me?.telegram_username ? `@${me.telegram_username}` : "не подключён"} />
           <SettingsField label="Язык" value={me?.language_code ? me.language_code.toUpperCase() : "—"} pills />
-          <SettingsField
-            label="Онбординг"
-            value={me?.onboarding_complete ? "Завершён" : "Не завершён"}
-          />
+          <OnboardingStatusRow done={!!me?.onboarding_complete} />
         </>
       )}
     </SettingsBlock>
@@ -462,6 +460,41 @@ function SettingsBlock({
     </section>
   );
 }
+
+// Onboarding row gets its own component because the "не завершён" state
+// needs an inline CTA back to /onboarding — a plain SettingsField has no
+// slot for an action button, and pushing the user to figure out where to
+// resume was the very thing that made this row useless.
+function OnboardingStatusRow({ done }: { done: boolean }) {
+  return (
+    <div className="flex items-center gap-3.5 py-2.5 border-b border-[var(--border)] last:border-b-0">
+      <div className="w-[120px] text-[13px] text-[var(--ink-mute)] shrink-0">Онбординг</div>
+      <div className="flex-1 text-[13.5px] tracking-[-0.005em]">
+        {done ? (
+          <span className="inline-flex items-center gap-1.5 text-[var(--ink)]">
+            <Check className="size-3.5" style={{ color: "var(--sage)" }} />
+            Завершён
+          </span>
+        ) : (
+          <span className="text-[var(--ink-mute)]">Не завершён</span>
+        )}
+      </div>
+      {done ? (
+        <SettingsIcon className="size-3.5 text-[var(--ink-subtle)] opacity-40 cursor-not-allowed" />
+      ) : (
+        <Link
+          href="/onboarding"
+          className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
+          style={{ background: "var(--peach)" }}
+        >
+          Продолжить
+          <ArrowRight className="size-[13px]" strokeWidth={2} />
+        </Link>
+      )}
+    </div>
+  );
+}
+
 
 function SettingsField({
   label, value, pills,
