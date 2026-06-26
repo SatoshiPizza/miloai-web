@@ -442,6 +442,11 @@ export const tgBridge = {
     api.post<WizardAuditResponse>("/api/web/campaigns/wizard/audit", body),
   wizardLaunch: (body: WizardLaunchRequest) =>
     api.post<WizardLaunchResponse>("/api/web/campaigns/wizard/launch", body),
+  auditSuggestFix: (body: { code: "audience" | "offer"; service_id?: number }) =>
+    api.post<{ suggestion: string; reasoning: string }>(
+      "/api/web/audit/suggest-fix",
+      body,
+    ),
   campaigns: () => api.get<CampaignsResponse>("/api/web/campaigns"),
   campaign: (id: string) => api.get<CampaignDetail>(`/api/web/campaigns/${encodeURIComponent(id)}`),
   channels: () => api.get<ChannelsResponse>("/api/web/channels"),

@@ -17,9 +17,11 @@ import {
   type WizardAuditResponse,
   type WizardLaunchResponse,
   type WizardLaunchResult,
+  type BusinessDetail,
 } from "@/lib/tg-bridge";
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
 import { ScoreCircle } from "@/components/score-circle";
+import { AuditFixDrawer } from "@/components/audit-fix-drawer";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 type PlatformKey = "meta" | "google";
@@ -69,6 +71,13 @@ export default function NewCampaignWizard() {
   // Step 4 — audit
   const [auditing, setAuditing] = useState(false);
   const [audit, setAudit] = useState<WizardAuditResponse | null>(null);
+
+  // "Внести правки" drawer — opens when user clicks the inline fix CTA
+  // on an audit warning. business is fetched lazily because the warning
+  // codes that the drawer cares about (contacts/audience/offer) live on
+  // Business, not on User or Service.
+  const [business, setBusiness] = useState<BusinessDetail | null>(null);
+  const [drawerCode, setDrawerCode] = useState<"contacts" | "audience" | "offer" | null>(null);
 
   // Step 5 — launch
   const [launching, setLaunching] = useState(false);
@@ -121,6 +130,19 @@ export default function NewCampaignWizard() {
   useEffect(() => {
     if (step === 4 && !audit && !auditing) runAudit();
   }, [step, audit, auditing, runAudit]);
+
+  // Fetch the active business once we enter the audit step so the "Внести
+  // правки" drawer has somewhere to PATCH. Skipping this on earlier steps
+  // saves one round-trip for the platform/service/budget happy path.
+  useEffect(() => {
+    if (step === 4 && !business) {
+      tgBridge.activeBusiness()
+        .then(setBusiness)
+        .catch((e) => {
+          console.warn("activeBusiness load failed", e);
+        });
+    }
+  }, [step, business]);
 
   async function launch() {
     if (!serviceId) return;
@@ -353,7 +375,11 @@ export default function NewCampaignWizard() {
               </>
             }
           >
-            <AuditBody audit={audit} loading={auditing} />
+            <AuditBody
+              audit={audit}
+              loading={auditing}
+              onFix={setDrawerCode}
+            />
           </WizardCard>
         )}
 
@@ -393,6 +419,26 @@ export default function NewCampaignWizard() {
           </WizardCard>
         )}
       </div>
+
+      <AuditFixDrawer
+        open={drawerCode !== null}
+        code={drawerCode}
+        business={business}
+        serviceId={serviceId ?? undefined}
+        onClose={() => setDrawerCode(null)}
+        onSaved={async () => {
+          // Re-pull the business so the next "Внести правки" opens with
+          // fresh values, and re-run the audit so the warning flips OK.
+          try {
+            const fresh = await tgBridge.activeBusiness();
+            setBusiness(fresh);
+          } catch (e) {
+            console.warn("activeBusiness refresh failed", e);
+          }
+          setAudit(null);
+          runAudit();
+        }}
+      />
     </div>
   );
 }
@@ -806,7 +852,20 @@ function ForecastTile({ label, value, sub }: { label: string; value: string; sub
 // ─────────────────────────────────────────────────────────
 
 
-function AuditBody({ audit, loading }: { audit: WizardAuditResponse | null; loading: boolean }) {
+// Audit warnings the inline drawer can resolve. Any other code (budget,
+// landing, photos) is either fixed elsewhere in the wizard or needs an
+// action that lives outside the drawer (raise budget, generate landing).
+const FIXABLE_CODES = new Set(["contacts", "audience", "offer"]);
+
+function AuditBody({
+  audit,
+  loading,
+  onFix,
+}: {
+  audit: WizardAuditResponse | null;
+  loading: boolean;
+  onFix?: (code: "contacts" | "audience" | "offer") => void;
+}) {
   if (loading || !audit) {
     return (
       <div className="space-y-2 py-3">
@@ -878,7 +937,17 @@ function AuditBody({ audit, loading }: { audit: WizardAuditResponse | null; load
 
       {/* Items */}
       <div className="mt-3.5 space-y-2">
-        {audit.items.map((it, i) => <AuditItemCard key={i} item={it} />)}
+        {audit.items.map((it, i) => (
+          <AuditItemCard
+            key={i}
+            item={it}
+            onFix={
+              onFix && it.status !== "ok" && it.code && FIXABLE_CODES.has(it.code)
+                ? () => onFix(it.code as "contacts" | "audience" | "offer")
+                : undefined
+            }
+          />
+        ))}
       </div>
 
       {/* AI priority fix */}
@@ -911,7 +980,13 @@ function AuditBody({ audit, loading }: { audit: WizardAuditResponse | null; load
 }
 
 
-function AuditItemCard({ item }: { item: { status: string; message: string; fix: string | null } }) {
+function AuditItemCard({
+  item,
+  onFix,
+}: {
+  item: { status: string; message: string; fix: string | null };
+  onFix?: () => void;
+}) {
   const color = item.status === "ok" ? "var(--sage)" : item.status === "warn" ? "var(--warn)" : "var(--destructive)";
   const bg = item.status === "ok" ? "var(--sage-soft)" : item.status === "warn" ? "#FBEDD3" : "#F7DDD0";
   const Icon = item.status === "ok" ? Check : AlertTriangle;
@@ -936,6 +1011,16 @@ function AuditItemCard({ item }: { item: { status: string; message: string; fix:
           </div>
         )}
       </div>
+      {onFix && (
+        <button
+          type="button"
+          onClick={onFix}
+          className="shrink-0 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium transition-opacity hover:opacity-80"
+          style={{ background: "var(--peach)", color: "#fff" }}
+        >
+          Внести правки <ArrowRight className="size-3" strokeWidth={2.2} />
+        </button>
+      )}
     </div>
   );
 }
