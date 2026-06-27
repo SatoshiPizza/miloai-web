@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, ArrowRight, Rocket, Sparkles, Check, AlertTriangle, X,
-  Loader2, Plug, Bell, Plus,
+  Loader2, Plug, Bell, Plus, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -942,7 +942,7 @@ function AuditBody({
             key={i}
             item={it}
             onFix={
-              onFix && it.status !== "ok" && it.code && FIXABLE_CODES.has(it.code)
+              onFix && it.code && FIXABLE_CODES.has(it.code)
                 ? () => onFix(it.code as "contacts" | "audience" | "offer")
                 : undefined
             }
@@ -1012,14 +1012,32 @@ function AuditItemCard({
         )}
       </div>
       {onFix && (
-        <button
-          type="button"
-          onClick={onFix}
-          className="shrink-0 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium transition-opacity hover:opacity-80"
-          style={{ background: "var(--peach)", color: "#fff" }}
-        >
-          Внести правки <ArrowRight className="size-3" strokeWidth={2.2} />
-        </button>
+        // For non-OK warnings the action is loud (peach) because clearing
+        // the warning matters. For OK items we still want to let the user
+        // refine the answer ('AI guessed wrong on the audience') but in a
+        // way that doesn't visually compete with real problems → ghost
+        // pencil button.
+        item.status === "ok" ? (
+          <button
+            type="button"
+            onClick={onFix}
+            className="shrink-0 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium transition-colors hover:bg-[var(--card-soft)]"
+            style={{ color: "var(--ink-mute)" }}
+            title="Изменить"
+          >
+            <Pencil className="size-[12px]" strokeWidth={2} />
+            Изменить
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onFix}
+            className="shrink-0 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium transition-opacity hover:opacity-80"
+            style={{ background: "var(--peach)", color: "#fff" }}
+          >
+            Внести правки <ArrowRight className="size-3" strokeWidth={2.2} />
+          </button>
+        )
       )}
     </div>
   );
