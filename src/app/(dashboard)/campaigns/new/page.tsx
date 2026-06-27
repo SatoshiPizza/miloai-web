@@ -92,10 +92,16 @@ export default function NewCampaignWizard() {
         // Hydrate service prefill once data lands. We hop straight to the
         // budget step (3) because the user just expressed clear intent
         // ("Запустить кампанию для этой услуги") — making them re-pick the
-        // service on step 2 is friction.
+        // service on step 2 is friction. EXCEPTION: when there are no
+        // connected ad accounts yet the platform step is the whole point
+        // (it shows the Connect Meta/Google buttons), so we DON'T skip
+        // past it — otherwise the user only finds out something is wrong
+        // at the very last "Запустить" click with a 400.
         if (prefilledServiceId && s.some((svc) => svc.id === prefilledServiceId)) {
           setServiceId(prefilledServiceId);
-          setStep(3);
+          if (a.has_meta || a.has_google) {
+            setStep(3);
+          }
         }
       })
       .catch((e) => {
@@ -146,6 +152,15 @@ export default function NewCampaignWizard() {
 
   async function launch() {
     if (!serviceId) return;
+    if (!platforms.meta && !platforms.google) {
+      // Catch the "no platform selected" case here instead of letting the
+      // backend bounce it as a generic 400 — the wizard's shortcut from
+      // /services skips step 1, and without this guard the user finds
+      // out only at the final click.
+      toast.error("Выбери хотя бы одну платформу (Meta или Google)");
+      setStep(1);
+      return;
+    }
     setLaunching(true);
     try {
       const r = await tgBridge.wizardLaunch({
