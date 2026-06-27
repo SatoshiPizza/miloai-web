@@ -82,23 +82,34 @@ export function AuditFixDrawer({
   }, [code, serviceId]);
 
   const handleSave = useCallback(async () => {
-    if (!business || !code) return;
+    if (!code) return;
     setSaving(true);
     try {
-      const patch: Partial<BusinessDetail> = {};
+      // Route by code via the new /audit/apply-fix endpoint instead of
+      // patching Business directly. Contacts → Business, audience and
+      // offer → BusinessService — the audit reads from different tables
+      // per warning and patching Business.usp for an "offer" warning
+      // would silently keep the warning red.
       if (code === "contacts") {
-        patch.contact_phone = phone.trim() || null;
-        patch.contact_whatsapp = whatsapp.trim() || null;
-        patch.contact_email = email.trim() || null;
+        await tgBridge.auditApplyFix({
+          code: "contacts",
+          contact_phone: phone.trim() || null,
+          contact_whatsapp: whatsapp.trim() || null,
+          contact_email: email.trim() || null,
+        });
       } else if (code === "audience") {
-        patch.target_audience = audience.trim() || null;
+        await tgBridge.auditApplyFix({
+          code: "audience",
+          service_id: serviceId,
+          text: audience.trim() || null,
+        });
       } else if (code === "offer") {
-        // No dedicated offer column on Business — fold it into the USP
-        // text so the next generation prompt sees it. When we add a
-        // proper offer field this branch moves to that.
-        patch.usp = offer.trim() || null;
+        await tgBridge.auditApplyFix({
+          code: "offer",
+          service_id: serviceId,
+          text: offer.trim() || null,
+        });
       }
-      await tgBridge.patchBusiness(business.id, patch);
       toast.success("Сохранено. Аудит сейчас пересоберётся.");
       onSaved();
       onClose();
@@ -108,7 +119,7 @@ export function AuditFixDrawer({
     } finally {
       setSaving(false);
     }
-  }, [business, code, phone, whatsapp, email, audience, offer, onSaved, onClose]);
+  }, [code, serviceId, phone, whatsapp, email, audience, offer, onSaved, onClose]);
 
   if (!open || !code) return null;
 

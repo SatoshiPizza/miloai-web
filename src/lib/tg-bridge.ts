@@ -447,6 +447,14 @@ export const tgBridge = {
       "/api/web/audit/suggest-fix",
       body,
     ),
+  auditApplyFix: (body: {
+    code: "contacts" | "audience" | "offer";
+    service_id?: number;
+    contact_phone?: string | null;
+    contact_whatsapp?: string | null;
+    contact_email?: string | null;
+    text?: string | null;
+  }) => api.post<{ ok: boolean }>("/api/web/audit/apply-fix", body),
   campaigns: () => api.get<CampaignsResponse>("/api/web/campaigns"),
   campaign: (id: string) => api.get<CampaignDetail>(`/api/web/campaigns/${encodeURIComponent(id)}`),
   channels: () => api.get<ChannelsResponse>("/api/web/channels"),
