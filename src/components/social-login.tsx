@@ -209,7 +209,13 @@ export function MetaLoginButton({
           }
         })();
       },
-      { scope: "email,public_profile" }
+      // Only public_profile — auto-granted, no App Review needed. Email
+      // was throwing "Invalid Scopes: email" after Artem migrated the app
+      // to 'Facebook Login for Business' (which doesn't ship classic
+      // consumer-auth permissions). Login by FB user id is fine — the
+      // backend upserts a user identity by fb sub, and email stays
+      // optional (users can still connect email later via magic-link).
+      { scope: "public_profile" }
     );
   }
 
