@@ -58,20 +58,32 @@ export default function AccountsPage() {
 
   useEffect(() => {
     if (!waitingForOauth) return;
+    // Snapshot the state at the moment we started waiting. Using
+    // accounts?.has_meta inside the interval was reading the SAME
+    // state that setAccounts had just updated — closure captured the
+    // pre-update value but the effect immediately re-ran with the
+    // post-update deps, so 'wasConnected' flipped to true and the
+    // transition check never fired again. Result: spinner never
+    // finalized. baselineConnected is fixed at effect-start and
+    // stays stable for the interval's lifetime.
+    const platform = waitingForOauth;
+    const baselineConnected =
+      platform === "meta" ? !!accounts?.has_meta : !!accounts?.has_google;
     const t = setInterval(() => {
       tgBridge.adAccounts().then((a) => {
-        const wasConnected = waitingForOauth === "meta" ? accounts?.has_meta : accounts?.has_google;
-        const nowConnected = waitingForOauth === "meta" ? a.has_meta : a.has_google;
+        const nowConnected = platform === "meta" ? a.has_meta : a.has_google;
         setAccounts(a);
-        if (!wasConnected && nowConnected) {
-          toast.success(`${waitingForOauth === "meta" ? "Meta Ads" : "Google Ads"} подключён!`);
+        if (!baselineConnected && nowConnected) {
+          toast.success(`${platform === "meta" ? "Meta Ads" : "Google Ads"} подключён!`);
           setWaitingForOauth(null);
         }
       }).catch(() => {});
     }, 4000);
     const stop = setTimeout(() => setWaitingForOauth(null), 5 * 60 * 1000);
     return () => { clearInterval(t); clearTimeout(stop); };
-  }, [waitingForOauth, accounts?.has_meta, accounts?.has_google]);
+    // Deliberately NOT depending on accounts.* here — see comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingForOauth]);
 
   async function connectPlatform(platform: "meta" | "google") {
     setOauthLoading(platform);

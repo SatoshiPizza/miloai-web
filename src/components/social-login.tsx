@@ -34,7 +34,7 @@ declare global {
       init: (cfg: { appId: string; version: string; xfbml?: boolean; cookie?: boolean }) => void;
       login: (
         cb: (resp: { authResponse?: { accessToken: string; userID: string } | null; status: string }) => void,
-        opts?: { scope?: string }
+        opts?: { scope?: string; config_id?: string }
       ) => void;
     };
     fbAsyncInit?: () => void;
