@@ -63,12 +63,20 @@ export default function OnboardingPage() {
         const biz = await tgBridge.activeBusiness();
         setBusiness(biz);
         setCategory(biz.category ?? null);
-        // Re-hydrate source choice from biz fields when present.
+        // Re-hydrate source choice from biz fields when present. For the
+        // 'Сам опишу' branch we stash the user's typed description into
+        // biz.description at step 1b so a page refresh / mid-flow return
+        // doesn't lose it — otherwise Step 3 would fire 'Не указан
+        // источник анализа' because text_description was only in memory.
         if (biz.source_type) {
           setSource({
             type: biz.source_type as SourceChoice["type"],
             site_url: biz.site_url ?? undefined,
             instagram_url: biz.instagram_url ?? undefined,
+            text_description:
+              biz.source_type === "none"
+                ? biz.description ?? undefined
+                : undefined,
           });
         }
         // Resume mid-flow.
@@ -141,6 +149,14 @@ export default function OnboardingPage() {
             source_type: source?.type ?? null,
             site_url: source?.site_url ?? null,
             instagram_url: source?.instagram_url ?? null,
+            // Persist the free-text intake into business.description so
+            // Step 3 can resume after a refresh. Step 3 overwrites this
+            // with the AI-extracted description on success, so this is
+            // only the interim staging value.
+            description:
+              source?.type === "none"
+                ? source?.text_description ?? null
+                : undefined,
             onboarding_step: 2,
           });
           setPhase("2");

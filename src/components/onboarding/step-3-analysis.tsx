@@ -90,7 +90,9 @@ export function Step3Analysis({
   useEffect(() => {
     if (!siteUrl && !textDescription) {
       setStatus("error");
-      setErrorMsg("Не указан источник анализа");
+      setErrorMsg(
+        "Нет данных о бизнесе. Вернись на шаг «Источник» и укажи сайт или опиши бизнес голосом/текстом."
+      );
       return;
     }
     const ctl = new AbortController();
