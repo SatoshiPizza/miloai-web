@@ -13,7 +13,7 @@ import { useState as useStateLocal } from "react";
 
 import { api } from "@/lib/api";
 import { getSessionToken, saveSession } from "@/lib/session";
-import { GoogleLoginButton, MetaLoginButton } from "@/components/social-login";
+import { GoogleLoginButton } from "@/components/social-login";
 
 /**
  * Marketing landing — bold direction (iteration 4, variant B).
@@ -431,18 +431,12 @@ function AuthCard() {
             }}
             onDone={() => setBusy(false)}
           />
-          <MetaLoginButton
-            next="/dashboard"
-            onStart={() => {
-              setBusy(true);
-              setError(null);
-            }}
-            onError={(m) => {
-              setError(m);
-              setBusy(false);
-            }}
-            onDone={() => setBusy(false)}
-          />
+          {/* Facebook login button removed 2026-07-06 — the app was
+              auto-migrated to Meta's 'Facebook Login for Business',
+              which doesn't ship classic consumer email/public_profile
+              permissions. Google Sign-in + magic-link cover the
+              onboarding path, and the ads-management OAuth in
+              /accounts stays untouched. */}
         </div>
 
         <p className="mt-5 flex items-start gap-1.5 text-[11px] leading-relaxed text-[var(--ink-subtle)]">

@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { Loader2, Trash2, Mail } from "lucide-react";
 import { tgBridge, type Identity, type IdentityProvider } from "@/lib/tg-bridge";
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
-import { GoogleLoginButton, MetaLoginButton } from "@/components/social-login";
+import { GoogleLoginButton } from "@/components/social-login";
 
 const PROVIDER_META: Record<string, { label: string; icon: React.ReactNode }> = {
   telegram: {
@@ -148,14 +148,10 @@ export function LinkedIdentitiesBlock() {
               onDone={async () => { setLinking(false); await reload(); }}
             />
           )}
-          {!haveProvider("meta") && (
-            <MetaLoginButton
-              next="/settings"
-              onStart={() => { setLinking(true); setError(null); }}
-              onError={(m) => { setError(m); setLinking(false); }}
-              onDone={async () => { setLinking(false); await reload(); }}
-            />
-          )}
+          {/* Meta linking removed 2026-07-06 — Meta migrated the app
+              to 'Facebook Login for Business' which doesn't ship
+              email/public_profile in the classic scope shape. Ads
+              OAuth via /accounts still works. */}
           {!haveProvider("telegram") && (
             <a
               href="/accounts"

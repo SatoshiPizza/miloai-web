@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
 import { tgBridge, type Me, type PairStart, type AccountsResponse } from "@/lib/tg-bridge";
+import { AdAccountPicker } from "@/components/ad-account-picker";
 import { toast } from "sonner";
 
 /**
@@ -31,6 +32,10 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<AccountsResponse | null>(null);
   const [oauthLoading, setOauthLoading] = useState<"meta" | "google" | null>(null);
   const [waitingForOauth, setWaitingForOauth] = useState<"meta" | "google" | null>(null);
+  // AdAccount picker — opens when user clicks 'Выбрать кабинет' on a
+  // connected-platform row that has more than one account under the
+  // token's scope.
+  const [pickerFor, setPickerFor] = useState<"meta" | "google" | null>(null);
 
   useEffect(() => {
     Promise.all([tgBridge.me(), tgBridge.adAccounts()])
@@ -172,11 +177,12 @@ export default function AccountsPage() {
       <AdAccountCard
         platform="meta"
         connected={metaConnected}
-        accounts={metaAccounts.map((a) => a.account_name ?? a.platform_account_id)}
+        accounts={metaAccounts}
         oauthLoading={oauthLoading === "meta"}
         waiting={waitingForOauth === "meta"}
         onConnect={() => connectPlatform("meta")}
         onDisconnect={() => disconnectPlatform("meta")}
+        onPick={() => setPickerFor("meta")}
       />
 
       <div className="h-3.5" />
@@ -185,11 +191,12 @@ export default function AccountsPage() {
       <AdAccountCard
         platform="google"
         connected={googleConnected}
-        accounts={googleAccounts.map((a) => a.account_name ?? a.platform_account_id)}
+        accounts={googleAccounts}
         oauthLoading={oauthLoading === "google"}
         waiting={waitingForOauth === "google"}
         onConnect={() => connectPlatform("google")}
         onDisconnect={() => disconnectPlatform("google")}
+        onPick={() => setPickerFor("google")}
       />
 
       {/* Team */}
@@ -241,6 +248,24 @@ export default function AccountsPage() {
           </p>
         </DialogContent>
       </Dialog>
+
+      {/* Ad-account picker — one at a time; opens on 'Выбрать кабинет'
+          click, closes on Save or Cancel. Refetches accounts on save so
+          the card's primary-account label reflects the new pin. */}
+      <AdAccountPicker
+        open={pickerFor !== null}
+        platform={pickerFor ?? "meta"}
+        accounts={accounts?.accounts ?? []}
+        onClose={() => setPickerFor(null)}
+        onSaved={async () => {
+          try {
+            const fresh = await tgBridge.adAccounts();
+            setAccounts(fresh);
+          } catch (e) {
+            console.warn("refresh accounts failed", e);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -358,15 +383,16 @@ function TelegramHero({
 // ═════════════════════════════════════════════════════════════════════════════
 
 function AdAccountCard({
-  platform, connected, accounts, oauthLoading, waiting, onConnect, onDisconnect,
+  platform, connected, accounts, oauthLoading, waiting, onConnect, onDisconnect, onPick,
 }: {
   platform: "meta" | "google";
   connected: boolean;
-  accounts: string[];
+  accounts: import("@/lib/tg-bridge").AdAccountSummary[];
   oauthLoading: boolean;
   waiting: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
+  onPick: () => void;
 }) {
   const isMeta = platform === "meta";
   const Glyph = isMeta ? MetaGlyph : GoogleGlyph;
@@ -407,19 +433,37 @@ function AdAccountCard({
             </span>
           )}
         </div>
-        {connected && accounts.length > 0 && (
-          <div className="font-mono text-[12.5px] text-[var(--ink)] mt-1 truncate">
-            {accounts.length === 1 ? accounts[0] : `${accounts[0]} +${accounts.length - 1}`}
-          </div>
-        )}
+        {connected && accounts.length > 0 && (() => {
+          // Show the currently-pinned account (is_selected=true) rather
+          // than the first-in-list — matters when a user has 40 accounts
+          // and 'first' is arbitrary from Meta's response order.
+          const primary = accounts.find((a) => a.is_selected) ?? accounts[0];
+          const primaryLabel = primary.account_name ?? primary.platform_account_id;
+          const others = accounts.length - 1;
+          return (
+            <div className="font-mono text-[12.5px] text-[var(--ink)] mt-1 truncate">
+              {others === 0 ? primaryLabel : `${primaryLabel} +${others}`}
+            </div>
+          );
+        })()}
         <p className="text-[12.5px] text-[var(--ink-mute)] leading-relaxed mt-1 tracking-[-0.005em]">
           {description}
         </p>
       </div>
 
-      <div className="flex gap-1.5 shrink-0">
+      <div className="flex flex-wrap gap-1.5 shrink-0 justify-end">
         {connected ? (
           <>
+            {accounts.length > 1 && (
+              <button
+                onClick={onPick}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium text-[var(--peach-deep)] border transition-colors hover:opacity-80"
+                style={{ borderColor: "var(--peach-soft)", background: "var(--peach-wash)" }}
+              >
+                <SettingsIcon className="size-3.5" />
+                Выбрать кабинет
+              </button>
+            )}
             <button
               onClick={onConnect}
               disabled={oauthLoading}

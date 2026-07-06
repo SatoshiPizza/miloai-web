@@ -323,6 +323,7 @@ export type AdAccountSummary = {
   platform_account_id: string;
   account_name: string | null;
   currency: string;
+  is_selected?: boolean;
 };
 
 export type AccountsResponse = {
@@ -462,6 +463,11 @@ export const tgBridge = {
   googleOauthUrl: () => api.get<{ url: string }>("/api/web/oauth/google/url"),
   disconnectPlatform: (platform: "meta" | "google") =>
     api.post<ActionResult>(`/api/web/accounts/${platform}/disconnect`),
+  selectAdAccount: (platform: "meta" | "google", ad_account_id: number) =>
+    api.post<AccountsResponse>(
+      `/api/web/accounts/${platform}/select`,
+      { ad_account_id },
+    ),
   pauseCampaign: (id: string) =>
     api.post<ActionResult>(`/api/web/campaigns/${encodeURIComponent(id)}/pause`),
   resumeCampaign: (id: string) =>
