@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Image as ImageIcon, Sparkles, X } from "lucide-react";
+import { Image as ImageIcon, Sparkles, X, Loader2, Trash2, Upload } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
 import { tgBridge, type ServiceSummary, type ServiceBannerPreview } from "@/lib/tg-bridge";
 import { toast } from "sonner";
@@ -37,6 +44,9 @@ export default function CreativesPage() {
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [platformFilter, setPlatformFilter] = useState<"all" | "meta" | "google">("all");
   const [angleFilter, setAngleFilter] = useState<string>("Все");
+  const [photoManagerOpen, setPhotoManagerOpen] = useState(false);
+  const [photoCount, setPhotoCount] = useState<number | null>(null);
+  const [regenServiceId, setRegenServiceId] = useState<number | null>(null);
 
   useEffect(() => {
     tgBridge.services()
@@ -46,7 +56,35 @@ export default function CreativesPage() {
         toast.error("Не удалось загрузить креативы");
       })
       .finally(() => setLoading(false));
+    tgBridge.listBusinessPhotos()
+      .then((r) => setPhotoCount(r.photos.length))
+      .catch(() => setPhotoCount(0));
   }, []);
+
+  async function regenerateAll() {
+    if (!services || services.length === 0) {
+      toast.error("Нет услуг для регенерации");
+      return;
+    }
+    // Regenerate the first service in the list. Regenerating all at once
+    // would be N * 30s of GPT-4o time; the user's typical intent when
+    // clicking this button is "the current visible creatives are bad" —
+    // regen'ing one service and letting them re-click for others matches
+    // that intent while keeping wall-clock tight.
+    const target = services[0];
+    setRegenServiceId(target.id);
+    try {
+      const updated = await tgBridge.regenerateServiceCreatives(target.id);
+      setServices((prev) =>
+        (prev ?? []).map((s) => (s.id === updated.id ? updated : s)),
+      );
+      toast.success(`«${target.name}» — креативы перегенерированы`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось перегенерить");
+    } finally {
+      setRegenServiceId(null);
+    }
+  }
 
   const creatives = useMemo(() => flattenCreatives(services ?? []), [services]);
   const filtered = useMemo(
@@ -83,24 +121,43 @@ export default function CreativesPage() {
         </div>
         <div className="flex gap-2">
           <button
-            disabled
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-[13px] font-medium text-[var(--ink)] bg-card border border-[var(--border)] disabled:opacity-60"
-            title="Скоро: загрузка референсных фото"
+            onClick={() => setPhotoManagerOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-[13px] font-medium text-[var(--ink)] bg-card border border-[var(--border)] hover:bg-[var(--card-soft)] transition-colors"
+            title="Управление референсными фото"
           >
             <ImageIcon className="size-[13px] text-[var(--ink-mute)]" />
-            Загрузить фото
+            Фото
+            {photoCount != null && photoCount > 0 && (
+              <span
+                className="ml-0.5 px-1.5 rounded-full font-mono text-[10px] font-semibold"
+                style={{ background: "var(--peach-wash)", color: "var(--peach-deep)" }}
+              >
+                {photoCount}
+              </span>
+            )}
           </button>
           <button
-            disabled
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-[13px] font-medium text-white disabled:opacity-80"
+            onClick={regenerateAll}
+            disabled={regenServiceId != null || !services || services.length === 0}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             style={{ background: "var(--peach)" }}
-            title="Скоро: ручной триггер регенерации"
+            title="Перегенерировать креативы для первой услуги"
           >
-            <Sparkles className="size-[13px]" />
+            {regenServiceId != null ? (
+              <Loader2 className="size-[13px] animate-spin" />
+            ) : (
+              <Sparkles className="size-[13px]" />
+            )}
             Сгенерить ещё
           </button>
         </div>
       </header>
+
+      <PhotoManager
+        open={photoManagerOpen}
+        onClose={() => setPhotoManagerOpen(false)}
+        onCountChange={setPhotoCount}
+      />
 
       {/* Filters */}
       <div className="flex flex-col md:flex-row md:items-center gap-x-[18px] gap-y-2.5 mb-5">
@@ -443,5 +500,200 @@ function CounterCreativeBanner() {
         <X className="size-3.5" />
       </button>
     </div>
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Photo manager — sheet drawer
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Sheet-based photo pool manager. Shows current photos as a grid with
+ * hover-delete + a file picker / drag-drop zone. Photos are stored as
+ * data URIs on business.photo_pool and picked up by the banner
+ * renderer's `_pick_banner_photo` walk (business → user → gpt-image-1 →
+ * Unsplash).
+ */
+function PhotoManager({
+  open,
+  onClose,
+  onCountChange,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCountChange: (n: number) => void;
+}) {
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [deletingIdx, setDeletingIdx] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    tgBridge.listBusinessPhotos()
+      .then((r) => {
+        setPhotos(r.photos);
+        onCountChange(r.photos.length);
+      })
+      .catch(() => setPhotos([]))
+      .finally(() => setLoading(false));
+  }, [open, onCountChange]);
+
+  async function handleFiles(files: FileList | File[]) {
+    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (arr.length === 0) {
+      toast.error("Только изображения (JPG/PNG/WebP)");
+      return;
+    }
+    if (arr.length > 10) {
+      toast.error("До 10 фото за раз");
+      return;
+    }
+    setUploading(true);
+    try {
+      const r = await tgBridge.uploadBusinessPhotos(arr);
+      setPhotos(r.photos);
+      onCountChange(r.photos.length);
+      toast.success(`Добавлено ${arr.length} фото. Всего: ${r.photos.length}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось загрузить");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removePhoto(index: number) {
+    setDeletingIdx(index);
+    try {
+      const r = await tgBridge.deleteBusinessPhoto(index);
+      setPhotos(r.photos);
+      onCountChange(r.photos.length);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось удалить");
+    } finally {
+      setDeletingIdx(null);
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-[560px] overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="font-heading text-[22px] tracking-[-0.018em]">
+            Референсные фото
+          </SheetTitle>
+          <SheetDescription className="text-[13px] leading-relaxed">
+            Твои фото → баннеры, лендинги, креативы. Если пусто — AI
+            сгенерирует product-shot автоматически. До 60 фото.
+          </SheetDescription>
+        </SheetHeader>
+
+        {/* Upload zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+          }}
+          onClick={() => inputRef.current?.click()}
+          className="mt-5 rounded-[12px] px-5 py-8 text-center cursor-pointer transition-colors"
+          style={{
+            background: dragOver ? "var(--peach-wash)" : "var(--card-soft)",
+            border: `1.5px dashed ${dragOver ? "var(--peach)" : "var(--border)"}`,
+          }}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) handleFiles(e.target.files);
+              if (inputRef.current) inputRef.current.value = "";
+            }}
+          />
+          {uploading ? (
+            <div className="flex flex-col items-center gap-2 text-[13px] text-[var(--ink-mute)]">
+              <Loader2 className="size-5 animate-spin" style={{ color: "var(--peach-deep)" }} />
+              Загружаю…
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className="size-10 rounded-full flex items-center justify-center"
+                style={{ background: "var(--peach-wash)" }}
+              >
+                <Upload className="size-4" style={{ color: "var(--peach-deep)" }} />
+              </div>
+              <div className="text-[13.5px] font-medium text-[var(--ink)]">
+                Кликни или перетащи фото
+              </div>
+              <div className="text-[11.5px] text-[var(--ink-subtle)]">
+                JPG / PNG / WebP · до 10 за раз · до 15 МБ каждое
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Grid */}
+        <div className="mt-6">
+          <div className="mb-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-subtle)]">
+            В пуле · {photos.length}
+          </div>
+          {loading ? (
+            <div className="grid grid-cols-3 gap-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="aspect-square rounded-[10px]" />
+              ))}
+            </div>
+          ) : photos.length === 0 ? (
+            <div
+              className="rounded-[10px] px-4 py-6 text-center text-[12.5px] text-[var(--ink-subtle)]"
+              style={{ background: "var(--card-soft)" }}
+            >
+              Пока пусто. Загрузи 3-5 фото продукта / витрины / команды —
+              AI подставит их в баннеры вместо стоков.
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {photos.map((src, i) => (
+                <div
+                  key={i}
+                  className="relative aspect-square rounded-[10px] overflow-hidden group"
+                  style={{ background: "var(--card-soft)", border: "1px solid var(--border)" }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt={`Photo ${i + 1}`}
+                    className="w-full h-full object-cover"
+                    style={{ opacity: deletingIdx === i ? 0.4 : 1 }}
+                  />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removePhoto(i); }}
+                    disabled={deletingIdx === i}
+                    className="absolute top-1.5 right-1.5 size-6 rounded-full bg-white/95 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                    title="Удалить"
+                  >
+                    {deletingIdx === i ? (
+                      <Loader2 className="size-3 animate-spin text-[var(--ink-mute)]" />
+                    ) : (
+                      <Trash2 className="size-3 text-[var(--destructive)]" />
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

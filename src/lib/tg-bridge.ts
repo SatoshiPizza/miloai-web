@@ -454,6 +454,38 @@ export const tgBridge = {
   ) => api.patch<ServiceSummary>(`/api/web/services/${id}`, patch),
   deleteService: (id: number) =>
     api.del<void>(`/api/web/services/${id}`),
+  regenerateServiceCreatives: (id: number) =>
+    api.post<ServiceSummary>(`/api/web/services/${id}/regenerate`),
+
+  /** ── Photo pool ─────────────────────────────────────────
+   *  Photos live on business.photo_pool as data-URIs. Upload accepts
+   *  1-10 files at a time, backend resizes to 1440px max long-edge JPEG
+   *  q82 and appends. Playwright loads data-URIs directly in banner
+   *  HTML so no external storage needed. */
+  listBusinessPhotos: () =>
+    api.get<{ photos: string[] }>("/api/web/business/photos"),
+  uploadBusinessPhotos: async (files: File[]): Promise<{ photos: string[] }> => {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    // Custom fetch — the api.post helper JSON-encodes the body, we need
+    // multipart here. Uses the same Authorization + base URL as api.*.
+    const token = (typeof window !== "undefined" && window.localStorage.getItem("session_token")) || "";
+    const res = await fetch(`${config.apiUrl}/api/web/business/photos`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "ngrok-skip-browser-warning": "1",
+      },
+      body: fd,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `upload failed: ${res.status}`);
+    }
+    return res.json();
+  },
+  deleteBusinessPhoto: (index: number) =>
+    api.post<{ photos: string[] }>("/api/web/business/photos/delete", { index }),
   adAccounts: () => api.get<AccountsResponse>("/api/web/ad-accounts"),
   wizardAudit: (body: WizardAuditRequest) =>
     api.post<WizardAuditResponse>("/api/web/campaigns/wizard/audit", body),
