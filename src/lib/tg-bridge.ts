@@ -438,6 +438,18 @@ export const tgBridge = {
   sendMessage: (text: string) =>
     api.post<WebMessage>("/api/web/messages", { text }),
   services: () => api.get<ServiceSummary[]>("/api/web/services"),
+  patchService: (
+    id: number,
+    patch: {
+      name?: string;
+      description?: string | null;
+      price?: number | null;
+      price_currency?: string;
+      target_audience?: string | null;
+    },
+  ) => api.patch<ServiceSummary>(`/api/web/services/${id}`, patch),
+  deleteService: (id: number) =>
+    api.del<void>(`/api/web/services/${id}`),
   adAccounts: () => api.get<AccountsResponse>("/api/web/ad-accounts"),
   wizardAudit: (body: WizardAuditRequest) =>
     api.post<WizardAuditResponse>("/api/web/campaigns/wizard/audit", body),

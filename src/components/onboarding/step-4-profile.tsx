@@ -17,7 +17,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { ArrowRight, ArrowLeft, Sparkles, Edit2, Building2, Globe, Phone, Mail, MessageSquare, MapPin } from "lucide-react";
+import { ArrowRight, ArrowLeft, Sparkles, Edit2, Building2, Globe, Phone, Mail, MessageSquare, MapPin, Trash2, Check, X, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { OnbFrame } from "./onb-frame";
 import { tgBridge, type BusinessDetail, type ServiceSummary } from "@/lib/tg-bridge";
@@ -168,43 +169,30 @@ export function Step4Profile({
                 AI не нашёл услуг. Добавишь вручную позже в /services.
               </div>
             ) : (
-              <ul className="flex max-h-[360px] flex-col gap-2 overflow-y-auto">
+              <ul className="flex max-h-[360px] flex-col gap-2 overflow-y-auto pr-1">
                 {services.map((s) => (
-                  <li
+                  <ServiceRow
                     key={s.id}
-                    className="rounded-[10px] px-3 py-2.5"
-                    style={{
-                      background: "var(--peach-wash)",
-                      border: "1px solid var(--peach-soft)",
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="text-[13px] font-semibold text-[var(--ink)]">
-                        {s.name}
-                      </div>
-                      {s.price != null && (
-                        <div
-                          className="ml-auto font-mono text-[11px] tabular-nums"
-                          style={{ color: "var(--peach-deep)" }}
-                        >
-                          €{s.price.toFixed(0)}
-                        </div>
-                      )}
-                    </div>
-                    {s.description && (
-                      <div className="mt-1 text-[11.5px] leading-snug text-[var(--ink-mute)]">
-                        {s.description}
-                      </div>
-                    )}
-                  </li>
+                    service={s}
+                    onUpdate={(patched) =>
+                      setServices((prev) =>
+                        prev.map((x) => (x.id === patched.id ? patched : x)),
+                      )
+                    }
+                    onDelete={() =>
+                      setServices((prev) =>
+                        prev.filter((x) => x.id !== s.id),
+                      )
+                    }
+                  />
                 ))}
               </ul>
             )}
             <div
               className="mt-3 text-[11px] text-[var(--ink-subtle)]"
             >
-              Деталь по услуге, цены и креативы — в разделе /services после
-              онбординга.
+              Клик — редактировать. Корзинка — удалить лишнее. Детали и цены
+              — в разделе /services после онбординга.
             </div>
           </div>
         </div>
@@ -233,6 +221,181 @@ export function Step4Profile({
         </div>
       </div>
     </OnbFrame>
+  );
+}
+
+
+// Inline-editable service row. Click the card body → edit mode with two
+// fields (name + description). Save on ✓ / Cancel on ✕ / Delete via
+// trash icon on hover. Optimistic update: we mutate the parent list
+// immediately and roll back on error (rare — the backend is idempotent).
+function ServiceRow({
+  service,
+  onUpdate,
+  onDelete,
+}: {
+  service: ServiceSummary;
+  onUpdate: (patched: ServiceSummary) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(service.name);
+  const [desc, setDesc] = useState(service.description ?? "");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function save() {
+    const nextName = name.trim();
+    if (!nextName) {
+      toast.error("Название не может быть пустым");
+      return;
+    }
+    setSaving(true);
+    try {
+      const patched = await tgBridge.patchService(service.id, {
+        name: nextName,
+        description: desc.trim() ? desc.trim() : null,
+      });
+      onUpdate(patched);
+      setEditing(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось сохранить");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!confirm(`Удалить услугу «${service.name}»?`)) return;
+    setDeleting(true);
+    try {
+      await tgBridge.deleteService(service.id);
+      onDelete();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось удалить");
+      setDeleting(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <li
+        className="rounded-[10px] px-3 py-2.5"
+        style={{
+          background: "var(--peach-wash)",
+          border: "1.5px solid var(--peach)",
+        }}
+      >
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Название"
+          autoFocus
+          className="w-full rounded-[8px] px-2.5 py-1.5 text-[13px] font-semibold outline-none"
+          style={{
+            background: "white",
+            border: "1px solid var(--peach-soft)",
+            color: "var(--ink)",
+          }}
+        />
+        <textarea
+          rows={2}
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          placeholder="Описание (опционально)"
+          className="mt-2 w-full resize-none rounded-[8px] px-2.5 py-1.5 text-[12px] outline-none"
+          style={{
+            background: "white",
+            border: "1px solid var(--peach-soft)",
+            color: "var(--ink)",
+          }}
+        />
+        <div className="mt-2 flex items-center justify-end gap-1.5">
+          <button
+            onClick={() => {
+              setName(service.name);
+              setDesc(service.description ?? "");
+              setEditing(false);
+            }}
+            disabled={saving}
+            className="inline-flex items-center gap-1 rounded-[7px] px-2.5 py-1 text-[11.5px] text-[var(--ink-mute)] hover:bg-white/60 transition-colors"
+          >
+            <X className="size-3" />
+            Отмена
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="inline-flex items-center gap-1 rounded-[7px] px-2.5 py-1 text-[11.5px] font-medium text-white"
+            style={{ background: "var(--peach)" }}
+          >
+            {saving ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <Check className="size-3" />
+            )}
+            Сохранить
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li
+      className="group rounded-[10px] px-3 py-2.5 transition-colors hover:bg-white/40"
+      style={{
+        background: "var(--peach-wash)",
+        border: "1px solid var(--peach-soft)",
+        opacity: deleting ? 0.5 : 1,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="flex-1 min-w-0 text-left"
+        >
+          <div className="text-[13px] font-semibold text-[var(--ink)] truncate">
+            {service.name}
+          </div>
+        </button>
+        {service.price != null && (
+          <div
+            className="font-mono text-[11px] tabular-nums shrink-0"
+            style={{ color: "var(--peach-deep)" }}
+          >
+            €{service.price.toFixed(0)}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="p-1 rounded-[6px] text-[var(--ink-subtle)] opacity-0 group-hover:opacity-100 hover:text-[var(--peach-deep)] hover:bg-white/70 transition-all"
+          title="Редактировать"
+        >
+          <Edit2 className="size-3" />
+        </button>
+        <button
+          type="button"
+          onClick={remove}
+          disabled={deleting}
+          className="p-1 rounded-[6px] text-[var(--ink-subtle)] opacity-0 group-hover:opacity-100 hover:text-[var(--destructive)] hover:bg-white/70 transition-all disabled:opacity-40"
+          title="Удалить"
+        >
+          {deleting ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
+        </button>
+      </div>
+      {service.description && (
+        <div
+          onClick={() => setEditing(true)}
+          className="mt-1 text-[11.5px] leading-snug text-[var(--ink-mute)] cursor-text"
+        >
+          {service.description}
+        </div>
+      )}
+    </li>
   );
 }
 
