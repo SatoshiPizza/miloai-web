@@ -355,7 +355,17 @@ export type WizardAuditResponse = {
   service_landing_url: string | null;
 };
 
-export type WizardLaunchRequest = WizardAuditRequest;
+export type WizardLaunchRequest = WizardAuditRequest & {
+  /** Campaign objective — maps to Meta's OUTCOME_* + Google's conversion goal. */
+  goal?: "leads" | "sales" | "traffic" | "bookings";
+  /** ISO-2 country override; falls back to user.country / "EE". */
+  geo_country?: string;
+  geo_city?: string;
+  age_min?: number;
+  age_max?: number;
+  /** Freeform interest keywords piped into Meta's flexible_spec. */
+  interests?: string[];
+};
 
 export type WizardLaunchResult = {
   platform: string;

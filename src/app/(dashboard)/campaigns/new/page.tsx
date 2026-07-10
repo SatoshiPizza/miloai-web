@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, ArrowRight, Rocket, Sparkles, Check, AlertTriangle, X,
-  Loader2, Plug, Bell, Plus, Pencil, ExternalLink,
+  Loader2, Plug, Bell, Pencil, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -54,21 +54,32 @@ export default function NewCampaignWizard() {
 
   const [step, setStep] = useState<Step>(1);
 
-  // Step 1 — platforms
+  // Step 1 — Goal (куда ведём + что хотим)
+  const [services, setServices] = useState<ServiceSummary[] | null>(null);
+  const [serviceId, setServiceId] = useState<number | null>(null);
+  const [goal, setGoal] = useState<"leads" | "sales" | "traffic" | "bookings">("leads");
+
+  // Step 2 — Audience & Geo
+  const [geoCountry, setGeoCountry] = useState<string>("");
+  const [geoCity, setGeoCity] = useState<string>("");
+  const [ageMin, setAgeMin] = useState<number>(18);
+  const [ageMax, setAgeMax] = useState<number>(65);
+  const [interests, setInterests] = useState<string>("");
+
+  // Step 3 — Creatives (preview + regen). Regen state lives on the
+  // service level — the button re-fetches services list post-regen so
+  // banner_previews refresh.
+  const [regenBusy, setRegenBusy] = useState(false);
+
+  // Step 4 — Budget
+  const [budget, setBudget] = useState<string>("15");
+
+  // Step 5 — Platforms + Audit + Launch (all in one screen now)
   const [accounts, setAccounts] = useState<AccountsResponse | null>(null);
   const [platforms, setPlatforms] = useState<Record<PlatformKey, boolean>>({
     meta: false,
     google: false,
   });
-
-  // Step 2 — service
-  const [services, setServices] = useState<ServiceSummary[] | null>(null);
-  const [serviceId, setServiceId] = useState<number | null>(null);
-
-  // Step 3 — budget
-  const [budget, setBudget] = useState<string>("15");
-
-  // Step 4 — audit
   const [auditing, setAuditing] = useState(false);
   const [audit, setAudit] = useState<WizardAuditResponse | null>(null);
 
@@ -84,24 +95,28 @@ export default function NewCampaignWizard() {
   const [launchResult, setLaunchResult] = useState<WizardLaunchResponse | null>(null);
 
   useEffect(() => {
-    Promise.all([tgBridge.services(), tgBridge.adAccounts()])
-      .then(([s, a]) => {
+    Promise.all([
+      tgBridge.services(),
+      tgBridge.adAccounts(),
+      tgBridge.activeBusiness().catch(() => null),
+    ])
+      .then(([s, a, biz]) => {
         setServices(s);
         setAccounts(a);
         setPlatforms({ meta: a.has_meta, google: a.has_google });
-        // Hydrate service prefill once data lands. We hop straight to the
-        // budget step (3) because the user just expressed clear intent
-        // ("Запустить кампанию для этой услуги") — making them re-pick the
-        // service on step 2 is friction. EXCEPTION: when there are no
-        // connected ad accounts yet the platform step is the whole point
-        // (it shows the Connect Meta/Google buttons), so we DON'T skip
-        // past it — otherwise the user only finds out something is wrong
-        // at the very last "Запустить" click with a 400.
+        if (biz) {
+          setBusiness(biz);
+          // Seed the Audience step from business profile so the user
+          // isn't typing country/city again — they already told us at
+          // onboarding.
+          if (biz.country) setGeoCountry(biz.country);
+          if (biz.city) setGeoCity(biz.city);
+        }
+        // Hydrate service prefill from ?service=<id>. Skip Step 1 if
+        // set — the user just clicked "Запустить" on a service card so
+        // the goal picker still shows but pre-selects.
         if (prefilledServiceId && s.some((svc) => svc.id === prefilledServiceId)) {
           setServiceId(prefilledServiceId);
-          if (a.has_meta || a.has_google) {
-            setStep(3);
-          }
         }
       })
       .catch((e) => {
@@ -133,43 +148,36 @@ export default function NewCampaignWizard() {
     }
   }, [serviceId, dailyEur, platforms]);
 
+  // Audit runs the moment the user lands on Step 5, and after any
+  // platform toggle (adding Meta might change contact/creative checks).
   useEffect(() => {
-    if (step === 4 && !audit && !auditing) runAudit();
-  }, [step, audit, auditing, runAudit]);
-
-  // Fetch the active business once we enter the audit step so the "Внести
-  // правки" drawer has somewhere to PATCH. Skipping this on earlier steps
-  // saves one round-trip for the platform/service/budget happy path.
-  useEffect(() => {
-    if (step === 4 && !business) {
-      tgBridge.activeBusiness()
-        .then(setBusiness)
-        .catch((e) => {
-          console.warn("activeBusiness load failed", e);
-        });
-    }
-  }, [step, business]);
+    if (step === 5 && !audit && !auditing && !launchResult) runAudit();
+  }, [step, audit, auditing, launchResult, runAudit]);
 
   async function launch() {
     if (!serviceId) return;
     if (!platforms.meta && !platforms.google) {
-      // Catch the "no platform selected" case here instead of letting the
-      // backend bounce it as a generic 400 — the wizard's shortcut from
-      // /services skips step 1, and without this guard the user finds
-      // out only at the final click.
       toast.error("Выбери хотя бы одну платформу (Meta или Google)");
-      setStep(1);
       return;
     }
     setLaunching(true);
     try {
+      const interestsList = interests
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       const r = await tgBridge.wizardLaunch({
         service_id: serviceId,
         daily_budget_eur: dailyEur,
         platforms,
+        goal,
+        geo_country: geoCountry || undefined,
+        geo_city: geoCity || undefined,
+        age_min: ageMin !== 18 ? ageMin : undefined,
+        age_max: ageMax !== 65 ? ageMax : undefined,
+        interests: interestsList.length ? interestsList : undefined,
       });
       setLaunchResult(r);
-      setStep(5);
     } catch (e: unknown) {
       console.error(e);
       const msg = e instanceof Error ? e.message : "Запуск не удался";
@@ -179,13 +187,23 @@ export default function NewCampaignWizard() {
     }
   }
 
-  // Aggregate context line for step 2 subtitle
-  const ctxLabel = (() => {
-    if (platforms.meta && platforms.google) return "Запускаем в Meta + Google";
-    if (platforms.meta) return "Только Meta";
-    if (platforms.google) return "Только Google";
-    return "";
-  })();
+  async function regenerateCurrentService() {
+    if (!serviceId) return;
+    setRegenBusy(true);
+    try {
+      const updated = await tgBridge.regenerateServiceCreatives(serviceId);
+      setServices((prev) =>
+        (prev ?? []).map((s) => (s.id === updated.id ? updated : s)),
+      );
+      toast.success("Креативы перегенерированы");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось перегенерить");
+    } finally {
+      setRegenBusy(false);
+    }
+  }
+
+  const currentService = services?.find((s) => s.id === serviceId) ?? null;
 
   return (
     <div className="flex justify-center min-h-screen">
@@ -195,84 +213,29 @@ export default function NewCampaignWizard() {
 
         {step === 1 && (
           <WizardCard
-            title="Где запускаем?"
-            subtitle="Выбери платформы. Если что-то не подключено — кликни «Подключить» и пройди OAuth (1 минута)."
+            title="Что рекламируем и зачем"
+            subtitle="Выбери услугу, куда поведём трафик, и цель кампании — от неё зависит логика оптимизации."
             footer={
               <>
                 <FooterGhost onClick={() => router.push("/campaigns")}>← Отменить</FooterGhost>
-                <FooterPrimary
-                  onClick={() => setStep(2)}
-                  disabled={!platforms.meta && !platforms.google}
-                >
+                <FooterPrimary onClick={() => setStep(2)} disabled={!serviceId}>
                   Дальше <ArrowRight className="size-3.5" strokeWidth={2} />
                 </FooterPrimary>
               </>
             }
           >
-            <div className="flex flex-col gap-3">
-              {(["meta", "google"] as const).map((p) => (
-                <PlatformOption
-                  key={p}
-                  platform={p}
-                  connected={p === "meta" ? !!accounts?.has_meta : !!accounts?.has_google}
-                  enabled={platforms[p]}
-                  onConnect={async () => {
-                    try {
-                      const { url } = p === "meta"
-                        ? await tgBridge.metaOauthUrl()
-                        : await tgBridge.googleOauthUrl();
-                      window.open(url, "_blank", "noopener,noreferrer");
-                      toast.info("OAuth открылся в новой вкладке");
-                    } catch {
-                      toast.error("Не получилось получить OAuth-ссылку");
-                    }
-                  }}
-                  onToggle={() => setPlatforms((s) => ({ ...s, [p]: !s[p] }))}
-                />
-              ))}
+            <div className="mb-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]">
+              Куда ведём
             </div>
-          </WizardCard>
-        )}
-
-        {step === 2 && (
-          <WizardCard
-            title="Какую услугу рекламируем?"
-            subtitle={
-              <span className="flex items-center gap-2 flex-wrap">
-                <span
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-[10.5px] font-semibold uppercase tracking-[0.04em]"
-                  style={{
-                    background: "var(--peach-wash)",
-                    border: "1px solid var(--peach-soft)",
-                    color: "var(--peach-deep)",
-                  }}
-                >
-                  {platforms.meta && <MetaGlyph size={10} />}
-                  {platforms.google && <GoogleGlyph size={10} />}
-                  {ctxLabel.toUpperCase()}
-                </span>
-                <span className="text-[var(--ink-mute)]">· выбери что рекламируем</span>
-              </span>
-            }
-            footer={
-              <>
-                <FooterGhost onClick={() => setStep(1)}>← Назад</FooterGhost>
-                <FooterPrimary onClick={() => setStep(3)} disabled={!serviceId}>
-                  Дальше <ArrowRight className="size-3.5" strokeWidth={2} />
-                </FooterPrimary>
-              </>
-            }
-          >
             <div className="flex flex-col gap-2">
               {!services ? (
                 <>
                   <Skeleton className="h-16" />
                   <Skeleton className="h-16" />
-                  <Skeleton className="h-16" />
                 </>
               ) : services.length === 0 ? (
                 <div className="py-6 text-center text-sm text-[var(--ink-mute)]">
-                  Услуг пока нет. Пройди онбординг через бота.
+                  Услуг пока нет. Пройди онбординг или добавь в /services.
                 </div>
               ) : (
                 services.map((s) => (
@@ -287,29 +250,67 @@ export default function NewCampaignWizard() {
               )}
             </div>
 
-            <div
-              className="mt-3.5 px-3.5 py-2.5 rounded-lg flex items-center gap-2.5 text-[12.5px] cursor-pointer"
-              style={{
-                background: "var(--peach-wash)",
-                border: "1px dashed var(--peach-soft)",
-                color: "var(--peach-deep)",
-              }}
-            >
-              <Plus className="size-3.5" strokeWidth={2} />
-              Не вижу подходящую услугу — <span className="underline">добавить новую</span>
+            <div className="mt-6 mb-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]">
+              Что хотим получить
             </div>
+            <GoalPicker value={goal} onChange={setGoal} />
+          </WizardCard>
+        )}
+
+        {step === 2 && (
+          <WizardCard
+            title="Кому и где показываем"
+            subtitle="Гео + возраст + интересы. Всё опционально — если пропустить, AI использует профиль бизнеса."
+            footer={
+              <>
+                <FooterGhost onClick={() => setStep(1)}>← Назад</FooterGhost>
+                <FooterPrimary onClick={() => setStep(3)}>
+                  Дальше <ArrowRight className="size-3.5" strokeWidth={2} />
+                </FooterPrimary>
+              </>
+            }
+          >
+            <AudienceForm
+              country={geoCountry} onCountry={setGeoCountry}
+              city={geoCity} onCity={setGeoCity}
+              ageMin={ageMin} onAgeMin={setAgeMin}
+              ageMax={ageMax} onAgeMax={setAgeMax}
+              interests={interests} onInterests={setInterests}
+              businessAudienceHint={currentService?.target_audience ?? null}
+            />
           </WizardCard>
         )}
 
         {step === 3 && (
           <WizardCard
+            title="Креативы и тексты"
+            subtitle="AI сгенерил 3 варианта под твою услугу. Если не нравится — перегенерь. Настроить детально можно в /creatives."
+            footer={
+              <>
+                <FooterGhost onClick={() => setStep(2)}>← Назад</FooterGhost>
+                <FooterPrimary onClick={() => setStep(4)}>
+                  Дальше <ArrowRight className="size-3.5" strokeWidth={2} />
+                </FooterPrimary>
+              </>
+            }
+          >
+            <CreativePreview
+              service={currentService}
+              regenBusy={regenBusy}
+              onRegen={regenerateCurrentService}
+            />
+          </WizardCard>
+        )}
+
+        {step === 4 && (
+          <WizardCard
             title="Дневной бюджет"
             subtitle="EUR в день на каждую выбранную платформу. Алгоритмы Meta и Google лучше учатся от €10/день."
             footer={
               <>
-                <FooterGhost onClick={() => setStep(2)}>← Назад</FooterGhost>
-                <FooterPrimary onClick={() => setStep(4)} disabled={dailyEur < 1}>
-                  <Sparkles className="size-3.5" strokeWidth={2} /> Запустить аудит
+                <FooterGhost onClick={() => setStep(3)}>← Назад</FooterGhost>
+                <FooterPrimary onClick={() => setStep(5)} disabled={dailyEur < 1}>
+                  <ArrowRight className="size-3.5" strokeWidth={2} /> К запуску
                 </FooterPrimary>
               </>
             }
@@ -368,18 +369,18 @@ export default function NewCampaignWizard() {
           </WizardCard>
         )}
 
-        {step === 4 && (
+        {step === 5 && !launchResult && (
           <WizardCard
-            title="Анализ перед запуском"
-            subtitle="Проверяю настройки, бенчмарки, AI оценивает шансы. 5–15 секунд."
+            title="Запуск"
+            subtitle="Выбери платформы, посмотри аудит и нажми «Запустить». Кампании создаются в PAUSED — активируешь после проверки."
             footer={
               <>
-                <FooterGhost onClick={() => { setAudit(null); setStep(3); }} disabled={launching}>
+                <FooterGhost onClick={() => { setAudit(null); setStep(4); }} disabled={launching}>
                   ← Изменить бюджет
                 </FooterGhost>
                 <FooterPrimary
                   onClick={launch}
-                  disabled={launching || !audit || audit.recommendation === "do_not_launch"}
+                  disabled={launching || (!platforms.meta && !platforms.google) || !audit || audit?.recommendation === "do_not_launch"}
                 >
                   {launching ? (
                     <><Loader2 className="size-3.5 animate-spin" /> Запускаю...</>
@@ -390,6 +391,41 @@ export default function NewCampaignWizard() {
               </>
             }
           >
+            <div className="mb-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]">
+              На каких платформах
+            </div>
+            <div className="flex flex-col gap-3 mb-5">
+              {(["meta", "google"] as const).map((p) => (
+                <PlatformOption
+                  key={p}
+                  platform={p}
+                  connected={p === "meta" ? !!accounts?.has_meta : !!accounts?.has_google}
+                  enabled={platforms[p]}
+                  onConnect={async () => {
+                    try {
+                      const { url } = p === "meta"
+                        ? await tgBridge.metaOauthUrl()
+                        : await tgBridge.googleOauthUrl();
+                      window.open(url, "_blank", "noopener,noreferrer");
+                      toast.info("OAuth открылся в новой вкладке");
+                    } catch {
+                      toast.error("Не получилось получить OAuth-ссылку");
+                    }
+                  }}
+                  onToggle={() => {
+                    setPlatforms((s) => ({ ...s, [p]: !s[p] }));
+                    // Platform toggle invalidates the audit — different
+                    // checks apply per platform (Google needs RSA, Meta
+                    // needs Page). Refetch on next tick via useEffect.
+                    setAudit(null);
+                  }}
+                />
+              ))}
+            </div>
+
+            <div className="mb-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]">
+              Аудит перед запуском
+            </div>
             <AuditBody
               audit={audit}
               loading={auditing}
@@ -498,7 +534,7 @@ function Header() {
 
 
 function Stepper({ current }: { current: Step }) {
-  const labels = ["Платформы", "Услуга", "Бюджет", "Аудит", "Готово"] as const;
+  const labels = ["Цель", "Аудитория", "Креативы", "Бюджет", "Запуск"] as const;
   return (
     <div
       className="flex items-center gap-2 rounded-xl px-4 py-3.5 bg-card border"
@@ -1152,6 +1188,302 @@ function LaunchResultRow({ result }: { result: WizardLaunchResult }) {
         ) : (
           <div className="text-[12.5px] text-[var(--ink-mute)] leading-[1.5]">{result.error}</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────
+// Step 1 — Goal picker (4 chips)
+// ─────────────────────────────────────────────────────────
+
+const GOALS = [
+  { key: "leads", label: "Лиды", detail: "Заявки, звонки, форма" },
+  { key: "sales", label: "Продажи", detail: "Покупки на сайте / оффлайн" },
+  { key: "traffic", label: "Трафик", detail: "Клики на сайт, охват" },
+  { key: "bookings", label: "Записи", detail: "Онлайн-бронь / расписание" },
+] as const;
+
+function GoalPicker({
+  value,
+  onChange,
+}: {
+  value: "leads" | "sales" | "traffic" | "bookings";
+  onChange: (v: "leads" | "sales" | "traffic" | "bookings") => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {GOALS.map((g) => {
+        const active = value === g.key;
+        return (
+          <button
+            key={g.key}
+            type="button"
+            onClick={() => onChange(g.key)}
+            className="text-left rounded-[10px] px-3.5 py-3 transition-colors"
+            style={{
+              background: active ? "var(--peach-wash)" : "var(--card-soft)",
+              border: `1.5px solid ${active ? "var(--peach)" : "var(--border)"}`,
+            }}
+          >
+            <div
+              className="text-[13.5px] font-semibold"
+              style={{ color: active ? "var(--peach-deep)" : "var(--ink)" }}
+            >
+              {g.label}
+            </div>
+            <div className="mt-0.5 text-[11.5px] text-[var(--ink-mute)]">
+              {g.detail}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────
+// Step 2 — Audience & Geo
+// ─────────────────────────────────────────────────────────
+
+function AudienceForm({
+  country, onCountry,
+  city, onCity,
+  ageMin, onAgeMin,
+  ageMax, onAgeMax,
+  interests, onInterests,
+  businessAudienceHint,
+}: {
+  country: string;
+  onCountry: (v: string) => void;
+  city: string;
+  onCity: (v: string) => void;
+  ageMin: number;
+  onAgeMin: (n: number) => void;
+  ageMax: number;
+  onAgeMax: (n: number) => void;
+  interests: string;
+  onInterests: (v: string) => void;
+  businessAudienceHint: string | null;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {businessAudienceHint && (
+        <div
+          className="rounded-[10px] px-3.5 py-2.5 text-[12px] leading-relaxed"
+          style={{
+            background: "var(--sage-soft)",
+            border: "1px solid #BFD0B0",
+          }}
+        >
+          <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em]" style={{ color: "#456838" }}>
+            AI знает
+          </span>
+          <span className="text-[var(--ink)] ml-2">{businessAudienceHint}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <LabeledInput
+          label="Страна (ISO-2)"
+          placeholder="EE"
+          value={country}
+          maxLength={2}
+          onChange={(v) => onCountry(v.toUpperCase())}
+        />
+        <LabeledInput
+          label="Город"
+          placeholder="Tallinn"
+          value={city}
+          onChange={onCity}
+        />
+      </div>
+
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--ink-subtle)]">
+            Возраст
+          </span>
+          <span className="font-mono text-[12px] tabular-nums text-[var(--ink)]">
+            {ageMin} — {ageMax}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <input
+              type="range"
+              min={13}
+              max={ageMax - 1}
+              value={ageMin}
+              onChange={(e) => onAgeMin(Number(e.target.value))}
+              className="w-full accent-[var(--peach)]"
+            />
+            <div className="font-mono text-[10px] text-[var(--ink-subtle)] mt-0.5">от {ageMin}</div>
+          </div>
+          <div>
+            <input
+              type="range"
+              min={ageMin + 1}
+              max={100}
+              value={ageMax}
+              onChange={(e) => onAgeMax(Number(e.target.value))}
+              className="w-full accent-[var(--peach)]"
+            />
+            <div className="font-mono text-[10px] text-[var(--ink-subtle)] mt-0.5 text-right">до {ageMax}</div>
+          </div>
+        </div>
+      </div>
+
+      <LabeledInput
+        label="Интересы (через запятую, опционально)"
+        placeholder="ювелирные украшения, ручная работа, эко-косметика"
+        value={interests}
+        onChange={onInterests}
+        multiline
+      />
+    </div>
+  );
+}
+
+function LabeledInput({
+  label, value, onChange, placeholder, maxLength, multiline,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  maxLength?: number;
+  multiline?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 inline-block text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--ink-subtle)]">
+        {label}
+      </span>
+      {multiline ? (
+        <textarea
+          rows={2}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full resize-none rounded-[10px] px-3 py-2 text-[13.5px] outline-none transition-colors"
+          style={{
+            background: "var(--card-soft)",
+            border: "1.5px solid var(--border)",
+            color: "var(--ink)",
+          }}
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          maxLength={maxLength}
+          className="w-full rounded-[10px] px-3 py-2 text-[13.5px] outline-none transition-colors"
+          style={{
+            background: "var(--card-soft)",
+            border: "1.5px solid var(--border)",
+            color: "var(--ink)",
+          }}
+        />
+      )}
+    </label>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────
+// Step 3 — Creative preview + regenerate
+// ─────────────────────────────────────────────────────────
+
+function CreativePreview({
+  service,
+  regenBusy,
+  onRegen,
+}: {
+  service: ServiceSummary | null;
+  regenBusy: boolean;
+  onRegen: () => void;
+}) {
+  if (!service) {
+    return (
+      <div className="rounded-[10px] bg-[var(--card-soft)] px-4 py-6 text-center text-[12.5px] text-[var(--ink-subtle)]">
+        Услуга не выбрана — вернись на шаг «Цель».
+      </div>
+    );
+  }
+  const previews = service.banner_previews || [];
+  const hasCreatives = previews.length > 0;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[12.5px] text-[var(--ink-mute)]">
+          Услуга: <b className="text-[var(--ink)]">{service.name}</b>
+          {" · "}
+          {hasCreatives ? `${previews.length} варианта` : "нет креативов"}
+        </div>
+        <button
+          onClick={onRegen}
+          disabled={regenBusy}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+          style={{
+            background: "var(--peach)",
+            color: "white",
+          }}
+        >
+          {regenBusy ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="size-3.5" />
+          )}
+          Перегенерировать
+        </button>
+      </div>
+
+      {hasCreatives ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {previews.slice(0, 3).map((v, i) => (
+            <div
+              key={i}
+              className="rounded-[10px] p-3 flex flex-col gap-1.5 min-h-[130px]"
+              style={{
+                background: "var(--peach-wash)",
+                border: "1px solid var(--peach-soft)",
+              }}
+            >
+              <div
+                className="font-mono text-[9.5px] font-semibold uppercase tracking-[0.06em]"
+                style={{ color: "var(--peach-deep)" }}
+              >
+                {v.angle || "Вариант"}
+              </div>
+              <div className="text-[13px] font-semibold leading-snug text-[var(--ink)]">
+                {v.headline || "—"}
+              </div>
+              {v.subheadline && (
+                <div className="text-[11.5px] leading-snug text-[var(--ink-mute)]">
+                  {v.subheadline}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-[10px] bg-[var(--card-soft)] px-4 py-6 text-center text-[12.5px] text-[var(--ink-subtle)]">
+          Креативов ещё нет — нажми «Перегенерировать», AI соберёт 3 варианта за ~30с.
+        </div>
+      )}
+
+      <div className="text-[11.5px] text-[var(--ink-subtle)] leading-relaxed">
+        Хочешь детально править фото или тексты?{" "}
+        <a href="/creatives" className="underline text-[var(--peach-deep)]">
+          Перейти в /creatives
+        </a>
+        {" — там drag&drop загрузка фото и per-баннер edit."}
       </div>
     </div>
   );
