@@ -148,8 +148,12 @@ function RichPlan({
   business: BusinessDetail;
 }) {
   const platforms = Object.entries(plan.platforms || {});
+  const narrative = buildPlanNarrative(plan);
   return (
     <div className="space-y-4">
+      {/* Narrative — the "so what?" of all the numbers below */}
+      <PlanNarrative narrative={narrative} />
+
       {/* Totals */}
       <div
         className="rounded-[16px] bg-white p-5"
@@ -172,15 +176,172 @@ function RichPlan({
         </div>
       </div>
 
-      {/* Per-platform */}
-      {platforms.map(([key, p]) => (
-        <PlatformBlock key={key} platform={key} data={p} />
-      ))}
+      {/* Per-platform — collapsible detail */}
+      <details className="group">
+        <summary
+          className="cursor-pointer list-none inline-flex items-center gap-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-subtle)] hover:text-[var(--ink-mute)]"
+        >
+          <span className="transition-transform group-open:rotate-90">▸</span>
+          Детали по кабинетам
+        </summary>
+        <div className="mt-3 space-y-3">
+          {platforms.map(([key, p]) => (
+            <PlatformBlock key={key} platform={key} data={p} />
+          ))}
+        </div>
+      </details>
 
       {/* Photos audit */}
       <PhotoNote business={business} />
     </div>
   );
+}
+
+
+// ── Narrative builder ──────────────────────────────────────────────────────
+
+type NarrativeBlock = {
+  headline: string;
+  observations: string[];    // what AI noticed in the data
+  next_actions: string[];    // what to do about it
+};
+
+/**
+ * Rule-based narrative from starting_plan stats. Turns the data-dump
+ * ("17 campaigns · €69 · 2 leads") into a plain-language "here's what
+ * this means and what we should do" para so users understand WHY they're
+ * looking at this screen. Heuristics tuned for SMB budgets:
+ *
+ *  - CPA < €20      → cheap acquisition, scale
+ *  - CPA €20-50     → normal, refine targeting
+ *  - CPA > €50 or 0 → creative/audience burnout, replace
+ *  - 0 productive   → no active tests, launch fresh
+ *  - all paused     → dormant account, restart
+ */
+function buildPlanNarrative(plan: StartingPlan): NarrativeBlock {
+  const platforms = Object.values(plan.platforms || {});
+  const allCampaigns = platforms.flatMap((p) => p.top_campaigns || []);
+  const productive = allCampaigns.filter((c) => c.spend_7d > 0);
+  const paused = allCampaigns.filter((c) => c.status !== "active");
+  const totalLeads = plan.total_leads_7d || 0;
+  const totalSpend = plan.total_spend_7d || 0;
+  const cpa = totalLeads > 0 ? totalSpend / totalLeads : null;
+  const topProd = productive.slice().sort((a, b) => (b.spend_7d || 0) - (a.spend_7d || 0))[0];
+
+  // ── 1. No productive campaigns at all — starting from scratch
+  if (productive.length === 0) {
+    return {
+      headline: "Активных кампаний нет — стартуем с чистого листа",
+      observations: [
+        allCampaigns.length > 0
+          ? `${allCampaigns.length} кампаний в аккаунте, все на паузе или без спенда за 7 дней.`
+          : "Пока ни одной кампании в подключённом кабинете.",
+      ],
+      next_actions: [
+        "Запустим первый тест через визард — цель / аудитория / бюджет / креативы за 3 минуты.",
+        "AI сгенерит баннеры + текст под твой профиль без stock-мусора.",
+      ],
+    };
+  }
+
+  // ── 2. Productive campaigns exist — evaluate performance
+  const observations: string[] = [];
+  const next_actions: string[] = [];
+
+  observations.push(
+    `${productive.length} из ${allCampaigns.length} кампаний тратят реально: €${Math.round(totalSpend)} за 7д, ${totalLeads} лид${plural(totalLeads, ["", "а", "ов"])}.`,
+  );
+
+  if (topProd) {
+    const parts: string[] = [`Топ — «${topProd.name}»`];
+    if (topProd.cpa != null && topProd.leads_7d > 0) {
+      parts.push(`CPA €${topProd.cpa.toFixed(0)}`);
+    }
+    if (topProd.ctr != null) {
+      parts.push(`CTR ${(topProd.ctr * 100).toFixed(1)}%`);
+    }
+    observations.push(parts.join(" · ") + ".");
+  }
+
+  let headline: string;
+  if (cpa != null && cpa < 20) {
+    headline = "Дешёвая цена лида — масштабируем";
+    next_actions.push(`CPA €${cpa.toFixed(0)} ниже рынка. Поднимаем бюджет на топ-кампанию в 2x.`);
+    next_actions.push("Дублируем креатив на 2 новых аудитории — проверить width.");
+  } else if (cpa != null && cpa < 50) {
+    headline = "Работает, но можно лучше";
+    next_actions.push(`CPA €${cpa.toFixed(0)} нормальный. Тестируем 3 новых креатива против текущего winner'а.`);
+    if (topProd && topProd.ctr != null && topProd.ctr < 0.015) {
+      next_actions.push(`CTR ${(topProd.ctr * 100).toFixed(1)}% низкий — креативы выгорают, пора обновить.`);
+    }
+  } else if (totalLeads === 0 && totalSpend > 10) {
+    headline = "Спенд идёт, лидов нет — надо чинить";
+    next_actions.push("Аудит: проверим лендинг, оффер, targeting и креатив.");
+    next_actions.push("Ставим текущие кампании на паузу, запускаем чистый тест с новыми креативами.");
+  } else {
+    headline = "Есть база — но нужно оптимизировать";
+    if (cpa != null) {
+      next_actions.push(`CPA €${cpa.toFixed(0)} дороже, чем должно быть. Меняем креативы + сужаем аудиторию.`);
+    }
+    next_actions.push("Запускаем 3 новых теста через визард, старые ставим на паузу.");
+  }
+
+  if (paused.length >= 5) {
+    observations.push(`${paused.length} кампаний в паузе — почистим через месяц если не активируешь.`);
+  }
+
+  return { headline, observations, next_actions };
+}
+
+function PlanNarrative({ narrative }: { narrative: NarrativeBlock }) {
+  return (
+    <div
+      className="rounded-[16px] p-5"
+      style={{
+        background: "linear-gradient(135deg, #FCF1E8 0%, #F8E8D9 100%)",
+        border: "1px solid #F5DDC8",
+      }}
+    >
+      <div className="mb-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--peach-deep)" }}>
+        Вердикт AI
+      </div>
+      <div className="font-heading text-[19px] font-bold leading-[1.25] tracking-[-0.018em] text-[var(--ink)]">
+        {narrative.headline}
+      </div>
+
+      <div className="mt-4 space-y-2.5">
+        <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]">
+          Что вижу
+        </div>
+        {narrative.observations.map((o, i) => (
+          <div key={i} className="flex items-start gap-2 text-[13px] leading-relaxed text-[var(--ink)]">
+            <span className="mt-1.5 size-1 shrink-0 rounded-full" style={{ background: "var(--peach)" }} />
+            <span>{o}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-2.5">
+        <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]">
+          Что предлагаю
+        </div>
+        {narrative.next_actions.map((a, i) => (
+          <div key={i} className="flex items-start gap-2 text-[13px] leading-relaxed text-[var(--ink)]">
+            <span className="mt-1.5 size-1 shrink-0 rounded-full" style={{ background: "var(--sage)" }} />
+            <span>{a}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function plural(n: number, forms: [string, string, string]): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1];
+  return forms[2];
 }
 
 
