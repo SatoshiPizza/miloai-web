@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, Plug, Send, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
 import { getSessionToken } from "@/lib/session";
 import { tgBridge, type BusinessDetail, type Me } from "@/lib/tg-bridge";
@@ -84,11 +85,28 @@ export default function OnboardingPage() {
           router.replace("/dashboard");
           return;
         }
-        if (biz.onboarding_step >= 6) setPhase("6");
-        else if (biz.onboarding_step === 5) setPhase("5");
-        else if (biz.onboarding_step === 4) setPhase("4");
-        else if (biz.onboarding_step === 3) setPhase("3");
-        else if (biz.onboarding_step === 2) setPhase("2");
+        // If resuming into step 3 but the source fields are empty (BUG E
+        // legacy: user filled Step 1b before the fix that persisted
+        // text_description to business.description), Step 3 would land
+        // on a dead-end "Нет данных о бизнесе" tupik. Force them back to
+        // Step 1b to re-enter the source so analyze has something to eat.
+        const targetStep = biz.onboarding_step;
+        const hasSource = Boolean(
+          biz.site_url || biz.instagram_url ||
+          (biz.source_type === "none" && biz.description)
+        );
+        if (targetStep === 3 && !hasSource) {
+          toast.info(
+            "Расскажи ещё раз про бизнес — прошлые данные не сохранились."
+          );
+          setPhase("1b");
+          return;
+        }
+        if (targetStep >= 6) setPhase("6");
+        else if (targetStep === 5) setPhase("5");
+        else if (targetStep === 4) setPhase("4");
+        else if (targetStep === 3) setPhase("3");
+        else if (targetStep === 2) setPhase("2");
         else if (biz.category) setPhase("1b");
         // else stay at "1a"
       } catch {
@@ -180,6 +198,21 @@ export default function OnboardingPage() {
 
   // ── Step 3: live AI analysis ──
   if (phase === "3") {
+    // Guard: if we somehow landed here without source data (edge cases like
+    // partial state after refresh or hot-reload), bounce back to 1b instead
+    // of stranding the user on a red-error screen. Resume path in the
+    // bootstrap effect above catches the pre-fix legacy case; this covers
+    // the runtime case.
+    const hasSource = Boolean(
+      source?.site_url || source?.instagram_url || source?.text_description
+    );
+    if (!hasSource) {
+      queueMicrotask(() => {
+        toast.info("Сначала укажи источник — сайт, IG или опиши бизнес.");
+        setPhase("1b");
+      });
+      return null;
+    }
     return (
       <Step3Analysis
         siteUrl={source?.site_url}
