@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, ArrowRight, Rocket, Sparkles, Check, AlertTriangle, X,
-  Loader2, Plug, Bell, Plus, Pencil,
+  Loader2, Plug, Bell, Plus, Pencil, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1063,6 +1063,29 @@ function AuditItemCard({
 // Step 5 — Launch result row
 // ─────────────────────────────────────────────────────────
 
+/**
+ * Build a deep link to the platform's ads manager so the user can jump
+ * straight to the PAUSED campaign we just created. Meta's URL uses
+ * `act` (numeric ad account id, no prefix) + `selected_campaign_ids`.
+ * Google's uses the "customers/N" numeric segment + campaignId.
+ */
+function buildAdsManagerUrl(r: WizardLaunchResult): string {
+  const { platform, campaign_id, platform_account_id } = r;
+  if (!campaign_id || !platform_account_id) return "#";
+  if (platform === "meta") {
+    // "act_1234567" → "1234567"; also handle already-stripped form.
+    const actId = platform_account_id.replace(/^act_/, "");
+    return `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${actId}&selected_campaign_ids=${encodeURIComponent(campaign_id)}`;
+  }
+  if (platform === "google") {
+    // Google's "customers/N/..." — pull just the customer id digits.
+    const custMatch = platform_account_id.match(/customers?\/(\d+)/);
+    const custId = custMatch ? custMatch[1] : platform_account_id.replace(/\D/g, "");
+    return `https://ads.google.com/aw/campaigns?ocid=${custId}&campaignId=${encodeURIComponent(campaign_id)}`;
+  }
+  return "#";
+}
+
 
 function LaunchResultRow({ result }: { result: WizardLaunchResult }) {
   const ok = result.ok;
@@ -1102,6 +1125,27 @@ function LaunchResultRow({ result }: { result: WizardLaunchResult }) {
               <div className="font-mono text-[11px] text-[var(--ink-subtle)] mt-1 tabular-nums">
                 {isMeta ? "meta_camp_" : "google_camp_"}
                 {result.campaign_id}
+              </div>
+            )}
+            {result.campaign_id && result.platform_account_id && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <a
+                  href={buildAdsManagerUrl(result)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] text-[11.5px] font-medium text-[var(--peach-deep)] transition-colors hover:bg-white/60"
+                  style={{ border: "1px solid var(--peach-soft)", background: "white" }}
+                >
+                  <ExternalLink className="size-3" />
+                  Открыть в {isMeta ? "Ads Manager" : "Google Ads"}
+                </a>
+                <Link
+                  href={`/campaigns/${encodeURIComponent(result.campaign_id)}`}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] text-[11.5px] font-medium text-[var(--ink-mute)] transition-colors hover:bg-white/60"
+                  style={{ border: "1px solid var(--border)", background: "white" }}
+                >
+                  Открыть в UniAds →
+                </Link>
               </div>
             )}
           </>

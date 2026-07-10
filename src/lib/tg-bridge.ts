@@ -361,6 +361,10 @@ export type WizardLaunchResult = {
   platform: string;
   ok: boolean;
   campaign_id: string | null;
+  /** Raw platform account id — for Meta e.g. "act_1234" without prefix; for
+   * Google the "customers/N/..." form. Used to build the deep link to the
+   * platform's own ads manager after a successful launch. */
+  platform_account_id: string | null;
   detail: string | null;
   error: string | null;
 };
