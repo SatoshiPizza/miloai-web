@@ -6,6 +6,7 @@
 
 import { api } from "@/lib/api";
 import { config } from "@/lib/config";
+import { getSessionToken } from "@/lib/session";
 
 export type BusinessSummary = {
   id: number;
@@ -477,15 +478,24 @@ export const tgBridge = {
   uploadBusinessPhotos: async (files: File[]): Promise<{ photos: string[] }> => {
     const fd = new FormData();
     for (const f of files) fd.append("files", f);
-    // Custom fetch — the api.post helper JSON-encodes the body, we need
-    // multipart here. Uses the same Authorization + base URL as api.*.
-    const token = (typeof window !== "undefined" && window.localStorage.getItem("session_token")) || "";
+    // Custom fetch — api.post JSON-encodes the body but multipart needs
+    // FormData raw. Mirror api.ts auth precedence: session JWT if
+    // logged-in, else NEXT_PUBLIC_DEV_USER_ID via x-user-id (local dev).
+    // Never fall back to a bare Bearer "" — the backend was rejecting
+    // with 'missing Authorization Bearer or x-user-id' when the previous
+    // hardcoded wrong localStorage key returned an empty string.
+    const headers: Record<string, string> = {
+      "ngrok-skip-browser-warning": "1",
+    };
+    const token = getSessionToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    } else if (config.devUserId) {
+      headers["x-user-id"] = config.devUserId;
+    }
     const res = await fetch(`${config.apiUrl}/api/web/business/photos`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "ngrok-skip-browser-warning": "1",
-      },
+      headers,
       body: fd,
     });
     if (!res.ok) {
