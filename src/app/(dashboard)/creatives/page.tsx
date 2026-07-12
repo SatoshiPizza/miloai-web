@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/sheet";
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
 import { tgBridge, type ServiceSummary, type ServiceBannerPreview } from "@/lib/tg-bridge";
+import { config } from "@/lib/config";
+import { getSessionToken } from "@/lib/session";
 import { toast } from "sonner";
 import { EmptyState as SharedEmptyState } from "@/components/empty-state";
 
@@ -29,6 +31,9 @@ type Creative = {
   service: ServiceSummary;
   platform: "meta" | "google";
   preview: ServiceBannerPreview;
+  /** Index of this variant inside service.banner_previews — needed to
+   * build the /services/{id}/banner/{index}.png URL. */
+  index: number;
 };
 
 const ANGLES = ["Все", "Pain+Solution", "Direct Offer", "Trust+Premium"];
@@ -225,66 +230,138 @@ export default function CreativesPage() {
 // Card
 // ═════════════════════════════════════════════════════════════════════════════
 
-function CreativeCard({ creative }: { creative: Creative }) {
-  const tint = resolveTint(creative.preview.color_scheme);
+/**
+ * BannerImage — fetches the composed PNG from
+ * `/api/web/services/{id}/banner/{index}.png` and renders it as a blob
+ * URL. Auth-header-only, so we can't use plain <img src>; we fetch with
+ * Bearer token / dev x-user-id, blob-convert, and revoke on unmount.
+ *
+ * Loading + error states fall back to the original gradient placeholder
+ * so the card always communicates layout+headline even before the
+ * backend responds (first render is ~2-5s: playwright warm-up + photo
+ * pick + composite).
+ */
+function BannerImage({ creative, tint }: { creative: Creative; tint: string }) {
+  const [pngUrl, setPngUrl] = useState<string | null>(null);
+  const [errored, setErrored] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    let objectUrl: string | null = null;
+    const headers: Record<string, string> = {
+      "ngrok-skip-browser-warning": "1",
+    };
+    const token = getSessionToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    else if (config.devUserId) headers["x-user-id"] = config.devUserId;
+
+    fetch(
+      `${config.apiUrl}/api/web/services/${creative.service.id}/banner/${creative.index}.png`,
+      { headers },
+    )
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      })
+      .then((blob) => {
+        if (!alive) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPngUrl(objectUrl);
+      })
+      .catch(() => {
+        if (alive) setErrored(true);
+      });
+
+    return () => {
+      alive = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [creative.service.id, creative.index]);
+
   const businessName = creative.service.name;
 
-  return (
-    <div className="rounded-[14px] border border-[var(--border)] bg-card overflow-hidden flex flex-col">
-      {/* Banner preview */}
-      <div
-        className="relative aspect-square p-[18px] flex flex-col"
-        style={{ background: `linear-gradient(160deg, ${tint} 0%, ${tint}d0 60%, ${tint}88 100%)` }}
-      >
-        {/* Diagonal stripe texture */}
-        <div
-          className="absolute inset-0 opacity-40"
-          style={{ background: `repeating-linear-gradient(135deg, ${tint} 0 14px, ${tint}cc 14px 28px)` }}
-        />
-        {/* Vignette */}
-        <div
-          className="absolute inset-0"
-          style={{ background: `radial-gradient(circle at 30% 30%, transparent 30%, ${tint}cc 100%)` }}
-        />
-
-        {/* Platform corner */}
+  // Show the real PNG once loaded. Platform corner + brand pill still
+  // overlay on top so the card still marks Meta/Google + brand.
+  if (pngUrl && !errored) {
+    return (
+      <div className="relative aspect-square overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={pngUrl} alt={creative.preview.headline} className="w-full h-full object-cover" />
         <div className="absolute top-3 right-3 z-10 size-6 rounded-md bg-white/95 flex items-center justify-center">
           {creative.platform === "meta" ? <MetaGlyph size={12} /> : <GoogleGlyph size={12} />}
         </div>
-
-        {/* Brand pill */}
-        <div
-          className="relative z-10 self-start px-2.5 py-1 rounded-full font-mono text-[10px] font-semibold uppercase"
-          style={{ background: "rgba(255,255,255,0.95)", color: tint, letterSpacing: "0.04em" }}
-        >
-          {truncate(businessName, 20)}
-        </div>
-
-        <div className="flex-1" />
-
-        {/* Body */}
-        <div className="relative z-10">
-          <div
-            className="font-heading text-[17px] font-semibold leading-[1.15] tracking-[-0.01em] text-white"
-            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}
-          >
-            {creative.preview.headline}
-          </div>
-          {creative.preview.subheadline && (
-            <div className="text-[12px] mt-1.5" style={{ color: "rgba(255,255,255,0.85)" }}>
-              {creative.preview.subheadline}
-            </div>
-          )}
-        </div>
-
-        {/* CTA pill */}
-        <div
-          className="relative z-10 mt-3 px-3.5 py-1.5 rounded-full self-start text-[11.5px] font-semibold"
-          style={{ background: "#fff", color: tint }}
-        >
-          Записаться →
-        </div>
       </div>
+    );
+  }
+
+  // Placeholder — same design as before while PNG is loading / failed.
+  return (
+    <div
+      className="relative aspect-square p-[18px] flex flex-col"
+      style={{ background: `linear-gradient(160deg, ${tint} 0%, ${tint}d0 60%, ${tint}88 100%)` }}
+    >
+      <div
+        className="absolute inset-0 opacity-40"
+        style={{ background: `repeating-linear-gradient(135deg, ${tint} 0 14px, ${tint}cc 14px 28px)` }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{ background: `radial-gradient(circle at 30% 30%, transparent 30%, ${tint}cc 100%)` }}
+      />
+      <div className="absolute top-3 right-3 z-10 size-6 rounded-md bg-white/95 flex items-center justify-center">
+        {creative.platform === "meta" ? <MetaGlyph size={12} /> : <GoogleGlyph size={12} />}
+      </div>
+      <div
+        className="relative z-10 self-start px-2.5 py-1 rounded-full font-mono text-[10px] font-semibold uppercase"
+        style={{ background: "rgba(255,255,255,0.95)", color: tint, letterSpacing: "0.04em" }}
+      >
+        {truncate(businessName, 20)}
+      </div>
+      <div className="flex-1" />
+      <div className="relative z-10">
+        <div
+          className="font-heading text-[17px] font-semibold leading-[1.15] tracking-[-0.01em] text-white"
+          style={{ textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}
+        >
+          {creative.preview.headline}
+        </div>
+        {creative.preview.subheadline && (
+          <div className="text-[12px] mt-1.5" style={{ color: "rgba(255,255,255,0.85)" }}>
+            {creative.preview.subheadline}
+          </div>
+        )}
+      </div>
+      <div
+        className="relative z-10 mt-3 px-3.5 py-1.5 rounded-full self-start text-[11.5px] font-semibold"
+        style={{ background: "#fff", color: tint }}
+      >
+        Записаться →
+      </div>
+      {/* Tiny loading pill in bottom-right — signals real PNG is
+          rendering in the background */}
+      {!errored && (
+        <div
+          className="absolute bottom-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9.5px] font-mono uppercase tracking-[0.05em]"
+          style={{ background: "rgba(0,0,0,0.35)", color: "white" }}
+        >
+          <Loader2 className="size-2.5 animate-spin" />
+          рендер…
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function CreativeCard({ creative }: { creative: Creative }) {
+  const tint = resolveTint(creative.preview.color_scheme);
+
+  return (
+    <div className="rounded-[14px] border border-[var(--border)] bg-card overflow-hidden flex flex-col">
+      {/* Real rendered banner PNG from backend. Falls back to the
+          gradient+text placeholder while loading / on error so the card
+          still communicates the layout. */}
+      <BannerImage creative={creative} tint={tint} />
 
       {/* Card meta */}
       <div className="px-3.5 py-2.5 flex flex-col gap-1.5">
@@ -409,6 +486,7 @@ function flattenCreatives(services: ServiceSummary[]): Creative[] {
           service: s,
           platform: p,
           preview,
+          index: idx,
         });
       });
     }
