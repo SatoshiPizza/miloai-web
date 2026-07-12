@@ -66,23 +66,32 @@ export default function CreativesPage() {
       toast.error("Нет услуг для регенерации");
       return;
     }
-    // Regenerate the first service in the list. Regenerating all at once
-    // would be N * 30s of GPT-4o time; the user's typical intent when
-    // clicking this button is "the current visible creatives are bad" —
-    // regen'ing one service and letting them re-click for others matches
-    // that intent while keeping wall-clock tight.
-    const target = services[0];
-    setRegenServiceId(target.id);
-    try {
-      const updated = await tgBridge.regenerateServiceCreatives(target.id);
-      setServices((prev) =>
-        (prev ?? []).map((s) => (s.id === updated.id ? updated : s)),
+    // Regenerate every service in sequence. The user's mental model when
+    // clicking this button is "make ALL these ugly creatives better" —
+    // regenerating just one leaves a confusing mix of old+new (which is
+    // exactly the bug Артём hit). Sequential (not parallel) to avoid
+    // hammering the OpenAI TPM quota when a business has 10+ services.
+    const targets = services;
+    const failed: string[] = [];
+    for (const target of targets) {
+      setRegenServiceId(target.id);
+      try {
+        const updated = await tgBridge.regenerateServiceCreatives(target.id);
+        setServices((prev) =>
+          (prev ?? []).map((s) => (s.id === updated.id ? updated : s)),
+        );
+      } catch (e) {
+        console.warn(`regen failed for ${target.name}`, e);
+        failed.push(target.name);
+      }
+    }
+    setRegenServiceId(null);
+    if (failed.length === 0) {
+      toast.success(`Перегенерировано ${targets.length} услуг`);
+    } else {
+      toast.error(
+        `${targets.length - failed.length}/${targets.length} готово. Не удалось: ${failed.join(", ")}`,
       );
-      toast.success(`«${target.name}» — креативы перегенерированы`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "не удалось перегенерить");
-    } finally {
-      setRegenServiceId(null);
     }
   }
 
@@ -141,14 +150,25 @@ export default function CreativesPage() {
             disabled={regenServiceId != null || !services || services.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             style={{ background: "var(--peach)" }}
-            title="Перегенерировать креативы для первой услуги"
+            title="Перегенерировать креативы для всех услуг"
           >
             {regenServiceId != null ? (
-              <Loader2 className="size-[13px] animate-spin" />
+              <>
+                <Loader2 className="size-[13px] animate-spin" />
+                {(() => {
+                  const total = services?.length ?? 0;
+                  const idx = services?.findIndex((s) => s.id === regenServiceId) ?? -1;
+                  return idx >= 0 && total > 0
+                    ? `${idx + 1}/${total}`
+                    : "Генерю…";
+                })()}
+              </>
             ) : (
-              <Sparkles className="size-[13px]" />
+              <>
+                <Sparkles className="size-[13px]" />
+                Сгенерить всё
+              </>
             )}
-            Сгенерить ещё
           </button>
         </div>
       </header>
