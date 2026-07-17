@@ -318,6 +318,70 @@ export type ServiceSummary = {
   sample_headlines: string[];
 };
 
+/** One offer's deep profile. Mirrors OfferProfile in
+ *  app/ai/schemas/offer_profile.py. All fields optional — intake is
+ *  progressive. We only render/read; the backend owns the shape. */
+export type OfferProfile = {
+  economics?: {
+    what_it_is?: string | null;
+    price_mode?: "exact" | "from" | "individual" | "free" | null;
+    price_eur?: number | null;
+    avg_check_eur?: number | null;
+    margin_per_sale_eur?: number | null;
+    repeat_revenue_eur?: number | null;
+    monthly_capacity?: number | null;
+    close_rate?: number | null;
+    target_leads_month?: number | null;
+    acceptable_cpl_eur?: number | null;
+  };
+  buyers?: {
+    who_buys?: string[];
+    trigger_situations?: string[];
+    top_problems?: string[];
+    desired_outcome?: string | null;
+    current_frustration?: string | null;
+    pre_purchase_fears?: string[];
+    common_questions?: string[];
+    why_postpone?: string[];
+    what_they_tried?: string[];
+    why_choose_us?: string[];
+  };
+  proof?: {
+    concrete_result?: string | null;
+    time_to_first_result?: string | null;
+    depends_on?: string[];
+    cases?: string[];
+    numbers?: string[];
+    available_proof?: string[];
+    proof_urls?: string[];
+  };
+  entry_point?: {
+    kind?: string | null;
+    custom_kind?: string | null;
+    what_they_get?: string | null;
+    price_eur?: number | null;
+    duration?: string | null;
+    why_now?: string | null;
+    scarcity_kind?: string | null;
+    scarcity_detail?: string | null;
+    bonus?: string | null;
+    guarantee?: string | null;
+    generated_offer?: string | null;
+  };
+};
+
+export type IntakeBlock = "economics" | "buyers" | "proof" | "entry_point";
+
+export type OfferProfileResponse = {
+  offer_profile: OfferProfile;
+  profile_score: number;
+  weakest_blocks: string[];
+  max_cpl_eur: number | null;
+  breakeven_cpl_eur: number | null;
+  max_cpl_confidence: "high" | "medium" | "low";
+  suggested_daily_budget_eur: number | null;
+};
+
 export type AdAccountSummary = {
   id: number;
   platform: string;
@@ -467,6 +531,24 @@ export const tgBridge = {
     api.del<void>(`/api/web/services/${id}`),
   regenerateServiceCreatives: (id: number) =>
     api.post<ServiceSummary>(`/api/web/services/${id}/regenerate`),
+
+  /** ── Offer intake ───────────────────────────────────────
+   *  Deep per-product profile, collected at first launch. extract sends a
+   *  voice/text answer for one block; backend AI-fills it, merges, recomputes
+   *  score + max_cpl, returns the full state. probeVague bounces filler
+   *  answers ("качество") with a concrete re-ask before we accept them. */
+  getOfferProfile: (serviceId: number) =>
+    api.get<OfferProfileResponse>(`/api/web/services/${serviceId}/offer-profile`),
+  intakeExtract: (serviceId: number, block: IntakeBlock, transcript: string) =>
+    api.post<OfferProfileResponse>(
+      `/api/web/services/${serviceId}/intake/extract`,
+      { block, transcript },
+    ),
+  probeVague: (answer: string) =>
+    api.post<{ is_vague: boolean; reason: string | null; reask: string | null }>(
+      "/api/web/intake/probe-vague",
+      { answer },
+    ),
 
   /** ── Photo pool ─────────────────────────────────────────
    *  Photos live on business.photo_pool as data-URIs. Upload accepts

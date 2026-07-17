@@ -8,7 +8,7 @@ import { EmptyState as SharedEmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Rocket, RefreshCcw, Pencil, Globe, FolderOpen, Sparkles, FileText,
+  Rocket, RefreshCcw, Globe, FolderOpen, Sparkles, FileText,
 } from "lucide-react";
 import { tgBridge, type ServiceSummary, type ServiceBannerPreview } from "@/lib/tg-bridge";
 
@@ -181,10 +181,12 @@ function ServiceCard({ service }: { service: ServiceSummary }) {
               <RefreshCcw className="size-4" strokeWidth={1.6} />
               Регенерить
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2" disabled>
-              <Pencil className="size-4" strokeWidth={1.6} />
-              Редактировать
-            </Button>
+            <Link href={`/services/${service.id}/intake`}>
+              <Button variant="outline" className="w-full justify-start gap-2">
+                <FileText className="size-4" strokeWidth={1.6} />
+                Заполнить профиль
+              </Button>
+            </Link>
             <Button variant="outline" className="w-full justify-start gap-2" disabled={!service.has_landing}>
               <Globe className="size-4" strokeWidth={1.6} />
               {service.has_landing ? "Лендинг" : "Сгенерить лендинг"}

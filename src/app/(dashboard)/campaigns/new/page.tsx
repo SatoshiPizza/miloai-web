@@ -1420,6 +1420,22 @@ function CreativePreview({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Nudge toward the deep profile — this is where a user notices the
+          creatives are generic and is most receptive to "answer 4 questions
+          and they get sharp". Links to the per-product intake. */}
+      <a
+        href={`/services/${service.id}/intake`}
+        className="flex items-start gap-2.5 rounded-[10px] px-3.5 py-3 transition-colors hover:opacity-90"
+        style={{ background: "var(--peach-wash)", border: "1px solid var(--peach-soft)" }}
+      >
+        <Sparkles className="size-4 mt-0.5 shrink-0" style={{ color: "var(--peach-deep)" }} />
+        <div className="text-[12.5px] leading-relaxed text-[var(--ink)]">
+          <b>Хочешь креативы сильнее?</b> Ответь на 4 вопроса про этот продукт
+          — кто покупает, чего боятся, что предложить первым шагом. AI
+          соберёт объявления из реальных слов клиентов, а не шаблонов. →
+        </div>
+      </a>
+
       <div className="flex items-center justify-between gap-3">
         <div className="text-[12.5px] text-[var(--ink-mute)]">
           Услуга: <b className="text-[var(--ink)]">{service.name}</b>
