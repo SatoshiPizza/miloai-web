@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, ArrowRight, Rocket, Sparkles, Check, AlertTriangle, X,
-  Loader2, Plug, Bell, Pencil, ExternalLink,
+  Loader2, Plug, Bell, Pencil, ExternalLink, Upload, Image as ImageIconLucide,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ import {
 import { MetaGlyph, GoogleGlyph } from "@/components/platform-badge";
 import { ScoreCircle } from "@/components/score-circle";
 import { AuditFixDrawer } from "@/components/audit-fix-drawer";
+import { ServiceBanner } from "@/components/creatives/service-banner";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 type PlatformKey = "meta" | "google";
@@ -1399,6 +1400,14 @@ function LabeledInput({
 // Step 3 — Creative preview + regenerate
 // ─────────────────────────────────────────────────────────
 
+type CreativeStatus = {
+  photo_source: "site" | "upload" | "mixed" | "none";
+  own_photo_count: number;
+  content_generated: boolean;
+  content_stale: boolean;
+  variant_count: number;
+};
+
 function CreativePreview({
   service,
   regenBusy,
@@ -1408,6 +1417,59 @@ function CreativePreview({
   regenBusy: boolean;
   onRegen: () => void;
 }) {
+  const [status, setStatus] = useState<CreativeStatus | null>(null);
+  const [uploading, setUploading] = useState(false);
+  // Bumped after regen/upload so ServiceBanner re-fetches the PNG (its URL is
+  // otherwise stable and would serve the cached image).
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [autoRegenDone, setAutoRegenDone] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const serviceId = service?.id ?? null;
+
+  const loadStatus = useCallback(() => {
+    if (serviceId == null) return;
+    tgBridge.creativeStatus(serviceId).then(setStatus).catch(() => setStatus(null));
+  }, [serviceId]);
+
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  // Auto-refresh copy after intake: if the profile was edited more recently
+  // than the creatives were generated, regenerate once on entering this step
+  // so the user sees fresh, profile-driven ads without hunting for a button.
+  useEffect(() => {
+    if (!status || autoRegenDone || regenBusy) return;
+    if (status.content_stale) {
+      setAutoRegenDone(true);
+      onRegen();
+    }
+  }, [status, autoRegenDone, regenBusy, onRegen]);
+
+  // When a regen finishes (regenBusy true→false), refresh banners + status.
+  const prevBusy = useRef(regenBusy);
+  useEffect(() => {
+    if (prevBusy.current && !regenBusy) {
+      setRefreshKey((k) => k + 1);
+      loadStatus();
+    }
+    prevBusy.current = regenBusy;
+  }, [regenBusy, loadStatus]);
+
+  async function handleUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      await tgBridge.uploadBusinessPhotos(Array.from(files).slice(0, 10));
+      toast.success("Фото загружены — пересобираю баннеры");
+      setRefreshKey((k) => k + 1);
+      loadStatus();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось загрузить");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
   if (!service) {
     return (
       <div className="rounded-[10px] bg-[var(--card-soft)] px-4 py-6 text-center text-[12.5px] text-[var(--ink-subtle)]">
@@ -1415,47 +1477,45 @@ function CreativePreview({
       </div>
     );
   }
+
   const previews = service.banner_previews || [];
   const hasCreatives = previews.length > 0;
+  const brand = service.name;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Nudge toward the deep profile — this is where a user notices the
-          creatives are generic and is most receptive to "answer 4 questions
-          and they get sharp". Links to the per-product intake. */}
-      <a
-        href={`/services/${service.id}/intake`}
-        className="flex items-start gap-2.5 rounded-[10px] px-3.5 py-3 transition-colors hover:opacity-90"
-        style={{ background: "var(--peach-wash)", border: "1px solid var(--peach-soft)" }}
-      >
-        <Sparkles className="size-4 mt-0.5 shrink-0" style={{ color: "var(--peach-deep)" }} />
-        <div className="text-[12.5px] leading-relaxed text-[var(--ink)]">
-          <b>Хочешь креативы сильнее?</b> Ответь на 4 вопроса про этот продукт
-          — кто покупает, чего боятся, что предложить первым шагом. AI
-          соберёт объявления из реальных слов клиентов, а не шаблонов. →
-        </div>
-      </a>
+      {/* Honest photo-source line — tells the user WHERE the banner images
+          came from, and offers upload when we have nothing of theirs. */}
+      <PhotoSourceCard
+        status={status}
+        uploading={uploading}
+        onPick={() => fileRef.current?.click()}
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => handleUpload(e.target.files)}
+      />
 
       <div className="flex items-center justify-between gap-3">
         <div className="text-[12.5px] text-[var(--ink-mute)]">
-          Услуга: <b className="text-[var(--ink)]">{service.name}</b>
+          <b className="text-[var(--ink)]">{service.name}</b>
           {" · "}
           {hasCreatives ? `${previews.length} варианта` : "нет креативов"}
+          {status?.content_stale && (
+            <span className="ml-2 text-[var(--peach-deep)]">· обновляю…</span>
+          )}
         </div>
         <button
           onClick={onRegen}
           disabled={regenBusy}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-          style={{
-            background: "var(--peach)",
-            color: "white",
-          }}
+          style={{ background: "var(--peach)", color: "white" }}
         >
-          {regenBusy ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="size-3.5" />
-          )}
+          {regenBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
           Перегенерировать
         </button>
       </div>
@@ -1463,29 +1523,17 @@ function CreativePreview({
       {hasCreatives ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           {previews.slice(0, 3).map((v, i) => (
-            <div
+            <ServiceBanner
               key={i}
-              className="rounded-[10px] p-3 flex flex-col gap-1.5 min-h-[130px]"
-              style={{
-                background: "var(--peach-wash)",
-                border: "1px solid var(--peach-soft)",
-              }}
-            >
-              <div
-                className="font-mono text-[9.5px] font-semibold uppercase tracking-[0.06em]"
-                style={{ color: "var(--peach-deep)" }}
-              >
-                {v.angle || "Вариант"}
-              </div>
-              <div className="text-[13px] font-semibold leading-snug text-[var(--ink)]">
-                {v.headline || "—"}
-              </div>
-              {v.subheadline && (
-                <div className="text-[11.5px] leading-snug text-[var(--ink-mute)]">
-                  {v.subheadline}
-                </div>
-              )}
-            </div>
+              serviceId={service.id}
+              index={i}
+              headline={v.headline || service.name}
+              subheadline={v.subheadline}
+              colorScheme={v.color_scheme}
+              platform="meta"
+              brand={brand}
+              refreshKey={refreshKey}
+            />
           ))}
         </div>
       ) : (
@@ -1494,13 +1542,114 @@ function CreativePreview({
         </div>
       )}
 
-      <div className="text-[11.5px] text-[var(--ink-subtle)] leading-relaxed">
-        Хочешь детально править фото или тексты?{" "}
-        <a href="/creatives" className="underline text-[var(--peach-deep)]">
-          Перейти в /creatives
-        </a>
-        {" — там drag&drop загрузка фото и per-баннер edit."}
-      </div>
+      {/* Deep-profile nudge kept, but secondary now that banners are real. */}
+      <a
+        href={`/services/${service.id}/intake`}
+        className="flex items-start gap-2.5 rounded-[10px] px-3.5 py-2.5 transition-colors hover:opacity-90"
+        style={{ background: "var(--peach-wash)", border: "1px solid var(--peach-soft)" }}
+      >
+        <Sparkles className="size-3.5 mt-0.5 shrink-0" style={{ color: "var(--peach-deep)" }} />
+        <div className="text-[12px] leading-relaxed text-[var(--ink)]">
+          Не нравятся тексты? <b>Заполни профиль продукта</b> — AI соберёт
+          объявления из реальных слов твоих клиентов, а не шаблонов. →
+        </div>
+      </a>
+    </div>
+  );
+}
+
+// Honest sourcing line for the banner photos.
+function PhotoSourceCard({
+  status,
+  uploading,
+  onPick,
+}: {
+  status: CreativeStatus | null;
+  uploading: boolean;
+  onPick: () => void;
+}) {
+  if (!status) {
+    return <Skeleton className="h-12 w-full rounded-[10px]" />;
+  }
+
+  const { photo_source, own_photo_count } = status;
+
+  // Own photos (from site scrape or upload) → reassure + attribute.
+  if (photo_source === "site" || photo_source === "mixed") {
+    return (
+      <SourceRow
+        tone="sage"
+        text={
+          <>
+            Фото взял <b>с твоего сайта / соцсетей</b> ({own_photo_count} шт) и
+            собрал баннеры из них.
+          </>
+        }
+        action={{ label: uploading ? "Гружу…" : "Заменить своими", onClick: onPick, busy: uploading }}
+      />
+    );
+  }
+  if (photo_source === "upload") {
+    return (
+      <SourceRow
+        tone="sage"
+        text={<>Использую <b>твои {own_photo_count} загруженных фото</b> в баннерах.</>}
+        action={{ label: uploading ? "Гружу…" : "Добавить ещё", onClick: onPick, busy: uploading }}
+      />
+    );
+  }
+  // No own photos — explain the fallback and push upload.
+  return (
+    <SourceRow
+      tone="peach"
+      text={
+        <>
+          Своих фото нет — <b>AI сгенерит</b> под каждый баннер. Хочешь свои?
+          Загрузи фото товара / работ или желаемые примеры.
+        </>
+      }
+      action={{ label: uploading ? "Гружу…" : "Загрузить фото", onClick: onPick, busy: uploading, primary: true }}
+    />
+  );
+}
+
+function SourceRow({
+  tone,
+  text,
+  action,
+}: {
+  tone: "sage" | "peach";
+  text: ReactNode;
+  action: { label: string; onClick: () => void; busy?: boolean; primary?: boolean };
+}) {
+  const isSage = tone === "sage";
+  return (
+    <div
+      className="flex items-center gap-3 rounded-[10px] px-3.5 py-2.5"
+      style={{
+        background: isSage ? "var(--sage-soft)" : "var(--peach-wash)",
+        border: `1px solid ${isSage ? "#BFD0B0" : "var(--peach-soft)"}`,
+      }}
+    >
+      {isSage ? (
+        <Check className="size-4 shrink-0" style={{ color: "var(--sage)" }} />
+      ) : (
+        <ImageIconLucide className="size-4 shrink-0" style={{ color: "var(--peach-deep)" }} />
+      )}
+      <div className="flex-1 text-[12.5px] leading-relaxed text-[var(--ink)]">{text}</div>
+      <button
+        onClick={action.onClick}
+        disabled={action.busy}
+        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+        style={
+          action.primary
+            ? { background: "var(--peach)", color: "white" }
+            : { background: "var(--card)", border: "1px solid var(--border)", color: "var(--ink)" }
+        }
+      >
+        {action.busy ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+        {action.label}
+      </button>
     </div>
   );
 }

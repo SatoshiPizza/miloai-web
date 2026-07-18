@@ -552,6 +552,14 @@ export const tgBridge = {
       "/api/web/intake/probe-vague",
       { answer },
     ),
+  creativeStatus: (serviceId: number) =>
+    api.get<{
+      photo_source: "site" | "upload" | "mixed" | "none";
+      own_photo_count: number;
+      content_generated: boolean;
+      content_stale: boolean;
+      variant_count: number;
+    }>(`/api/web/services/${serviceId}/creative-status`),
 
   /** ── Photo pool ─────────────────────────────────────────
    *  Photos live on business.photo_pool as data-URIs. Upload accepts
