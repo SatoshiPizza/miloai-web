@@ -80,7 +80,7 @@ export default function CampaignsPage() {
               : "Все живые кампании из подключённых Meta & Google аккаунтов."}
           </p>
         </div>
-        <Link href="/campaigns/new">
+        <Link href="/services">
           <Button size="lg" className="gap-2">
             <Rocket className="size-4" /> Новая кампания
           </Button>
@@ -129,11 +129,11 @@ export default function CampaignsPage() {
                   icon={Rocket}
                   eyebrow="Кампании"
                   title="Здесь будут твои кампании"
-                  body="Подключи Meta и Google в онбординге — AI импортирует существующие и предложит план улучшений. Или собери первую через визард."
+                  body="Кампания запускается под конкретный продукт. Выбери услугу — AI соберёт креативы из её профиля, дальше бюджет и запуск."
                   actions={[
                     {
-                      label: "Новая кампания",
-                      href: "/campaigns/new",
+                      label: "Выбрать продукт",
+                      href: "/services",
                       primary: true,
                       icon: Rocket,
                     },

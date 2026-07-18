@@ -511,7 +511,7 @@ function ColumnEmpty({
           Запусти Meta-кампанию с lead-формой или добавь лид вручную.
         </p>
         <Link
-          href="/campaigns/new"
+          href="/services"
           className="px-3 py-1.5 rounded-md text-[11.5px] font-medium text-white inline-flex items-center gap-1.5"
           style={{ background: "var(--peach)" }}
         >

@@ -92,7 +92,7 @@ export default function DashboardPage() {
             {
               label: "Новая кампания",
               primary: true,
-              href: "/campaigns/new",
+              href: "/services",
               icon: <Rocket className="size-[14px]" />,
             },
           ]}

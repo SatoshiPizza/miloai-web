@@ -41,14 +41,10 @@ export default function ServicesPage() {
         <div>
           <h1 className="font-heading text-[28px] font-bold tracking-tight">Услуги</h1>
           <p className="text-[13.5px] text-[var(--ink-mute)] mt-1">
-            Каждая услуга — отдельный набор креативов, RSA и лендинг. Запускай кампанию одним кликом.
+            Выбери продукт для рекламы. У каждого — свой профиль, креативы, RSA и
+            лендинг. «Заполни профиль» → сильнее креативы, потом «Запусти кампанию».
           </p>
         </div>
-        <Link href="/campaigns/new">
-          <Button size="lg" className="gap-2">
-            <Rocket className="size-4" /> Новая кампания
-          </Button>
-        </Link>
       </header>
 
       {error && (
