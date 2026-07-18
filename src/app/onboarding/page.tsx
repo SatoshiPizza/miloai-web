@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, Plug, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,6 +42,12 @@ type Phase = "1a" | "1b" | "2" | "3" | "4" | "5" | "6";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // "Добавить бизнес" navigates here with ?new=1 to force a fresh flow —
+  // otherwise the bootstrap below resumes the active business (or the
+  // backend auto-selects the oldest one), so "add business" ended up
+  // reopening an existing business / bouncing to the dashboard.
+  const forceNew = searchParams?.get("new") === "1";
   const [phase, setPhase] = useState<Phase>("1a");
   const [category, setCategory] = useState<string | null>(null);
   const [source, setSource] = useState<SourceChoice | null>(null);
@@ -55,6 +61,11 @@ export default function OnboardingPage() {
     }
     (async () => {
       try {
+        // Explicit "add a new business" — do NOT resume/attach any existing
+        // business; start clean on phase 1a. persistStep() will createBusiness
+        // fresh (local `business` stays null), and createBusiness switches
+        // active to the new one.
+        if (forceNew) return;
         const me: Me = await tgBridge.me();
         const activeId = me.active_business_id;
         if (!activeId) {
@@ -113,7 +124,7 @@ export default function OnboardingPage() {
         // Silent — falls back to 1a with no business attached.
       }
     })();
-  }, [router]);
+  }, [router, forceNew]);
 
   // Helpers to persist + advance.
   const persistStep = useCallback(

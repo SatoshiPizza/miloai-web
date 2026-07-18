@@ -102,7 +102,10 @@ export function BusinessSwitcher({
 
   function addBusiness() {
     setOpen(false);
-    router.push("/onboarding");
+    // ?new=1 forces a fresh onboarding — without it the flow resumes the
+    // active business (or the backend auto-selects one), so "add business"
+    // reopened an existing one instead of starting a new business.
+    router.push("/onboarding?new=1");
   }
 
   // No active business AND no businesses at all → the user hasn't completed
