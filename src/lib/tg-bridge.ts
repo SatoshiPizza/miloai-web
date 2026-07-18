@@ -400,10 +400,15 @@ export type AccountsResponse = {
   has_google: boolean;
 };
 
+export type Destination =
+  | "site" | "landing" | "instagram" | "whatsapp" | "facebook" | "lead_form" | "booking";
+
 export type WizardAuditRequest = {
   service_id: number;
   daily_budget_eur: number;
   platforms: { meta?: boolean; google?: boolean };
+  destination?: Destination;
+  destination_url?: string;
 };
 
 export type WizardAuditItem = {
@@ -643,6 +648,8 @@ export const tgBridge = {
     api.post<LandingAuditReport>(`/api/web/campaigns/${encodeURIComponent(id)}/landing-audit`),
   republishLanding: (serviceId: number) =>
     api.post<LandingPublishResult>(`/api/web/services/${serviceId}/landing/republish`),
+  generateLanding: (serviceId: number) =>
+    api.post<LandingPublishResult>(`/api/web/services/${serviceId}/landing/generate`),
 
   // ── Leads ─────────────────────────────────────────────
   leads: () => api.get<Lead[]>("/api/web/leads"),

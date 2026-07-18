@@ -60,12 +60,14 @@ export default function NewCampaignWizard() {
   const [serviceId, setServiceId] = useState<number | null>(null);
   const [goal, setGoal] = useState<"leads" | "sales" | "traffic" | "bookings">("leads");
 
-  // Step 2 — Audience & Geo
+  // Step 2 — Audience & Geo + Destination
   const [geoCountry, setGeoCountry] = useState<string>("");
   const [geoCity, setGeoCity] = useState<string>("");
   const [ageMin, setAgeMin] = useState<number>(18);
   const [ageMax, setAgeMax] = useState<number>(65);
   const [interests, setInterests] = useState<string>("");
+  const [destination, setDestination] = useState<import("@/lib/tg-bridge").Destination | null>(null);
+  const [destinationUrl, setDestinationUrl] = useState<string>("");
 
   // Step 3 — Creatives (preview + regen). Regen state lives on the
   // service level — the button re-fetches services list post-regen so
@@ -138,6 +140,8 @@ export default function NewCampaignWizard() {
         service_id: serviceId,
         daily_budget_eur: dailyEur,
         platforms,
+        destination: destination ?? undefined,
+        destination_url: destinationUrl || undefined,
       });
       setAudit(res);
     } catch (e: unknown) {
@@ -147,7 +151,7 @@ export default function NewCampaignWizard() {
     } finally {
       setAuditing(false);
     }
-  }, [serviceId, dailyEur, platforms]);
+  }, [serviceId, dailyEur, platforms, destination, destinationUrl]);
 
   // Audit runs the moment the user lands on Step 5, and after any
   // platform toggle (adding Meta might change contact/creative checks).
@@ -177,6 +181,8 @@ export default function NewCampaignWizard() {
         age_min: ageMin !== 18 ? ageMin : undefined,
         age_max: ageMax !== 65 ? ageMax : undefined,
         interests: interestsList.length ? interestsList : undefined,
+        destination: destination ?? undefined,
+        destination_url: destinationUrl || undefined,
       });
       setLaunchResult(r);
     } catch (e: unknown) {
@@ -278,6 +284,17 @@ export default function NewCampaignWizard() {
               ageMax={ageMax} onAgeMax={setAgeMax}
               interests={interests} onInterests={setInterests}
               businessAudienceHint={currentService?.target_audience ?? null}
+            />
+
+            <div className="mt-6 mb-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]">
+              Куда ведём клиента
+            </div>
+            <DestinationPicker
+              serviceId={serviceId}
+              value={destination}
+              onChange={setDestination}
+              url={destinationUrl}
+              onUrl={setDestinationUrl}
             />
           </WizardCard>
         )}
@@ -1252,6 +1269,110 @@ function GoalPicker({
 // ─────────────────────────────────────────────────────────
 // Step 2 — Audience & Geo
 // ─────────────────────────────────────────────────────────
+
+const DESTINATIONS: { key: import("@/lib/tg-bridge").Destination; label: string; hint: string; needsUrl?: boolean; isLanding?: boolean }[] = [
+  { key: "site", label: "Сайт", hint: "вставь ссылку", needsUrl: true },
+  { key: "landing", label: "Лендинг", hint: "сгенерим страницу", isLanding: true },
+  { key: "lead_form", label: "Форма Meta", hint: "заявка без сайта" },
+  { key: "whatsapp", label: "WhatsApp", hint: "чат" },
+  { key: "instagram", label: "Instagram", hint: "Direct" },
+  { key: "facebook", label: "Facebook", hint: "Messenger" },
+  { key: "booking", label: "Онлайн-запись", hint: "расписание" },
+];
+
+// "Куда ведём клиента" — the destination decision, made here rather than
+// nagged about at launch. Landing option generates a page on the spot.
+function DestinationPicker({
+  serviceId, value, onChange, url, onUrl,
+}: {
+  serviceId: number | null;
+  value: import("@/lib/tg-bridge").Destination | null;
+  onChange: (v: import("@/lib/tg-bridge").Destination) => void;
+  url: string;
+  onUrl: (v: string) => void;
+}) {
+  const [genBusy, setGenBusy] = useState(false);
+  const [landingUrl, setLandingUrl] = useState<string | null>(null);
+
+  async function genLanding() {
+    if (serviceId == null) return;
+    setGenBusy(true);
+    try {
+      const r = await tgBridge.generateLanding(serviceId);
+      if (r.url) {
+        setLandingUrl(r.url);
+        onUrl(r.url);
+        toast.success("Лендинг сгенерирован");
+      } else {
+        toast.error("Не удалось получить ссылку лендинга");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось сгенерить лендинг");
+    } finally {
+      setGenBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {DESTINATIONS.map((d) => {
+          const active = value === d.key;
+          return (
+            <button
+              key={d.key}
+              type="button"
+              onClick={() => onChange(d.key)}
+              className="text-left rounded-[10px] px-3 py-2.5 transition-colors"
+              style={{
+                background: active ? "var(--peach-wash)" : "var(--card-soft)",
+                border: `1.5px solid ${active ? "var(--peach)" : "var(--border)"}`,
+              }}
+            >
+              <div className="text-[13px] font-semibold" style={{ color: active ? "var(--peach-deep)" : "var(--ink)" }}>
+                {d.label}
+              </div>
+              <div className="text-[11px] text-[var(--ink-mute)] mt-0.5">{d.hint}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {value === "site" && (
+        <LabeledInput
+          label="Ссылка на сайт / страницу"
+          placeholder="https://твой-сайт.ee/услуга"
+          value={url}
+          onChange={onUrl}
+        />
+      )}
+
+      {value === "landing" && (
+        <div
+          className="rounded-[10px] px-3.5 py-3 flex items-center gap-3"
+          style={{ background: "var(--peach-wash)", border: "1px solid var(--peach-soft)" }}
+        >
+          <div className="flex-1 text-[12.5px] leading-relaxed text-[var(--ink)]">
+            {landingUrl ? (
+              <>Лендинг готов: <a href={landingUrl} target="_blank" rel="noreferrer" className="underline text-[var(--peach-deep)]">{landingUrl.replace(/^https?:\/\//, "")}</a></>
+            ) : (
+              <>AI соберёт лендинг под эту услугу из профиля — заголовок, выгоды, кнопка заявки.</>
+            )}
+          </div>
+          <button
+            onClick={genLanding}
+            disabled={genBusy}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[9px] text-[12.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ background: "var(--peach)" }}
+          >
+            {genBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+            {landingUrl ? "Пересобрать" : "Сгенерировать"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AudienceForm({
   country, onCountry,
