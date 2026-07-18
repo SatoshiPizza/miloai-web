@@ -329,13 +329,14 @@ export default function NewCampaignWizard() {
                   €
                 </span>
                 <input
-                  type="number"
-                  min={1}
-                  step={1}
+                  type="text"
+                  inputMode="numeric"
                   value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
+                  onChange={(e) => setBudget(e.target.value.replace(/[^\d]/g, ""))}
                   className="font-mono font-medium text-[56px] leading-none tracking-[-0.03em] tabular-nums text-foreground bg-transparent border-0 outline-none focus:ring-0 px-0"
-                  style={{ width: `${Math.max(2, budget.length)}ch` }}
+                  // +1ch of slack so the last digit never clips; text+inputMode
+                  // avoids the number-spinner arrows that ate the space before.
+                  style={{ width: `${Math.max(2, budget.length) + 1}ch` }}
                 />
               </div>
               <div className="text-[15px] text-[var(--ink-mute)] self-end mb-1.5">
@@ -366,7 +367,7 @@ export default function NewCampaignWizard() {
             </div>
 
             {/* AI Forecast */}
-            <BudgetForecast dailyEur={dailyEur} platforms={platforms} />
+            <BudgetForecast dailyEur={dailyEur} />
           </WizardCard>
         )}
 
@@ -842,13 +843,16 @@ function ServiceOption({
 
 
 function BudgetForecast({
-  dailyEur, platforms,
+  dailyEur,
 }: {
   dailyEur: number;
-  platforms: Record<PlatformKey, boolean>;
 }) {
-  const platformCount = (platforms.meta ? 1 : 0) + (platforms.google ? 1 : 0);
-  const monthly = dailyEur * platformCount * 30;
+  // Per-platform, because the platform choice happens on the launch step —
+  // here we only know the daily budget. Monthly = daily × 30 for one
+  // platform; the copy says "на платформу" so multi-platform users just
+  // multiply. (Was computing × selected-platforms, which is 0 at this step
+  // and rendered "€0 · × 0 платформ".)
+  const monthly = dailyEur * 30;
   const convRate = 0.038;
   const leadsLow = Math.max(1, Math.round((monthly * convRate) / 1.2));
   const leadsHigh = Math.max(2, Math.round((monthly * convRate) * 1.2));
@@ -870,11 +874,11 @@ function BudgetForecast({
           AI · ПРОГНОЗ
         </div>
         <div className="text-[13px] leading-[1.55] tracking-[-0.005em]">
-          При <b>€{dailyEur.toFixed(0)}/день × {platformCount} платформ{platformCount === 1 ? "ы" : ""}</b>{" "}
-          и стандартных бенчмарках по нише:
+          При <b>€{dailyEur.toFixed(0)}/день на одну платформу</b> и стандартных
+          бенчмарках по нише:
         </div>
         <div className="grid grid-cols-3 gap-2.5 mt-2.5">
-          <ForecastTile label="Месячный бюджет" value={`€${monthly.toFixed(0)}`} />
+          <ForecastTile label="Бюджет / мес" value={`€${monthly.toFixed(0)}`} sub="на платформу" />
           <ForecastTile label="Прогноз лидов" value={`${leadsLow}–${leadsHigh}`} sub={`${(convRate * 100).toFixed(1)}% conv`} />
           <ForecastTile label="Ожидаемый CPL" value={`€${cplLow}–${cplHigh}`} sub={`бенчмарк €${benchmark}`} />
         </div>
