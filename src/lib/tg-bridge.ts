@@ -314,6 +314,9 @@ export type ServiceSummary = {
   has_google_rsa: boolean;
   has_landing: boolean;
   landing_url: string | null;
+  /** 0-100 offer-intake completeness — drives the readiness badge and which
+   *  card action is highlighted. */
+  profile_score: number;
   banner_previews: ServiceBannerPreview[];
   sample_headlines: string[];
 };

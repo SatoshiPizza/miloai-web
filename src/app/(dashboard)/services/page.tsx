@@ -8,7 +8,7 @@ import { EmptyState as SharedEmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Rocket, RefreshCcw, Globe, FolderOpen, Sparkles, FileText,
+  Rocket, RefreshCcw, Globe, FolderOpen, Sparkles, FileText, X, Check,
 } from "lucide-react";
 import { tgBridge, type ServiceSummary, type ServiceBannerPreview } from "@/lib/tg-bridge";
 
@@ -37,15 +37,16 @@ export default function ServicesPage() {
 
   return (
     <div className="p-8 max-w-[1200px] space-y-6">
-      <header className="flex items-start justify-between">
-        <div>
-          <h1 className="font-heading text-[28px] font-bold tracking-tight">Услуги</h1>
-          <p className="text-[13.5px] text-[var(--ink-mute)] mt-1">
-            Выбери продукт для рекламы. У каждого — свой профиль, креативы, RSA и
-            лендинг. «Заполни профиль» → сильнее креативы, потом «Запусти кампанию».
-          </p>
-        </div>
+      <header>
+        <h1 className="font-heading text-[28px] font-bold tracking-tight">
+          Что рекламируем?
+        </h1>
+        <p className="text-[13.5px] text-[var(--ink-mute)] mt-1">
+          Выбери продукт — с него и начинается кампания.
+        </p>
       </header>
+
+      <HowItWorks />
 
       {error && (
         <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
@@ -93,12 +94,15 @@ function ServiceCard({ service }: { service: ServiceSummary }) {
               <div className="font-mono text-[12.5px] text-[var(--ink-subtle)] mt-1 italic">цена не задана</div>
             )}
 
-            <div
-              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md mt-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.04em]"
-              style={{ background: statusBg, color: statusColor }}
-            >
-              <span className="size-1.5 rounded-full" style={{ background: statusColor }} />
-              {statusLabel}
+            <div className="flex flex-wrap items-center gap-1.5 mt-3">
+              <div
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md font-mono text-[10.5px] font-semibold uppercase tracking-[0.04em]"
+                style={{ background: statusBg, color: statusColor }}
+              >
+                <span className="size-1.5 rounded-full" style={{ background: statusColor }} />
+                {statusLabel}
+              </div>
+              <ReadinessPill score={service.profile_score} />
             </div>
 
             {service.landing_url && (
@@ -165,24 +169,46 @@ function ServiceCard({ service }: { service: ServiceSummary }) {
             )}
           </div>
 
-          {/* ── Right: actions 180px ── */}
+          {/* ── Right: actions 180px ──
+              Novice steering: when the offer profile is thin (<60), the first,
+              filled button is "Заполнить профиль" — that's what makes creatives
+              good. Once filled, "Запустить кампанию" takes the primary slot. */}
           <div className="p-5 lg:w-[200px] shrink-0 flex flex-col gap-2 border-t lg:border-t-0 lg:border-l bg-[var(--card-soft)]/30" style={{ borderColor: "var(--border)" }}>
-            <Link href={`/campaigns/new?service=${service.id}`}>
-              <Button className="w-full justify-start gap-2" disabled={!ready}>
-                <Rocket className="size-4" strokeWidth={1.8} />
-                Запустить кампанию
-              </Button>
-            </Link>
+            {service.profile_score < 60 ? (
+              <>
+                <Link href={`/services/${service.id}/intake`}>
+                  <Button className="w-full justify-start gap-2">
+                    <FileText className="size-4" strokeWidth={1.8} />
+                    Заполнить профиль
+                  </Button>
+                </Link>
+                <Link href={`/campaigns/new?service=${service.id}`}>
+                  <Button variant="outline" className="w-full justify-start gap-2" disabled={!ready}>
+                    <Rocket className="size-4" strokeWidth={1.6} />
+                    Запустить кампанию
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href={`/campaigns/new?service=${service.id}`}>
+                  <Button className="w-full justify-start gap-2" disabled={!ready}>
+                    <Rocket className="size-4" strokeWidth={1.8} />
+                    Запустить кампанию
+                  </Button>
+                </Link>
+                <Link href={`/services/${service.id}/intake`}>
+                  <Button variant="outline" className="w-full justify-start gap-2">
+                    <FileText className="size-4" strokeWidth={1.6} />
+                    Профиль
+                  </Button>
+                </Link>
+              </>
+            )}
             <Button variant="outline" className="w-full justify-start gap-2" disabled>
               <RefreshCcw className="size-4" strokeWidth={1.6} />
               Регенерить
             </Button>
-            <Link href={`/services/${service.id}/intake`}>
-              <Button variant="outline" className="w-full justify-start gap-2">
-                <FileText className="size-4" strokeWidth={1.6} />
-                Заполнить профиль
-              </Button>
-            </Link>
             <Button variant="outline" className="w-full justify-start gap-2" disabled={!service.has_landing}>
               <Globe className="size-4" strokeWidth={1.6} />
               {service.has_landing ? "Лендинг" : "Сгенерить лендинг"}
@@ -307,4 +333,98 @@ function EmptyState() {
 function truncate(s: string | null | undefined, n: number): string {
   if (!s) return "";
   return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
+
+// ── "How it works" strip ─────────────────────────────────────────────────
+
+const HOWITWORKS_KEY = "uniads.services.howitworks.dismissed";
+
+// A three-step orientation for first-timers who clicked "Новая кампания" and
+// landed here. Dismissible and remembered, so it doesn't nag returning users.
+function HowItWorks() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    // Read on mount to avoid SSR/localStorage mismatch.
+    setShow(
+      typeof window !== "undefined" &&
+        window.localStorage.getItem(HOWITWORKS_KEY) !== "1",
+    );
+  }, []);
+
+  if (!show) return null;
+
+  const steps = [
+    { n: 1, title: "Выбери продукт", body: "то, что рекламируешь — ниже в списке" },
+    { n: 2, title: "Заполни профиль", body: "5 минут голосом → AI соберёт сильные креативы" },
+    { n: 3, title: "Запусти кампанию", body: "бюджет, аудит и старт в Meta / Google" },
+  ];
+
+  return (
+    <div
+      className="relative rounded-[14px] p-4 pr-10"
+      style={{
+        background: "linear-gradient(135deg, #FCF1E8 0%, #F8E8D9 100%)",
+        border: "1px solid #F5DDC8",
+      }}
+    >
+      <button
+        onClick={() => {
+          window.localStorage.setItem(HOWITWORKS_KEY, "1");
+          setShow(false);
+        }}
+        className="absolute top-3 right-3 size-6 rounded-md flex items-center justify-center text-[var(--ink-mute)] hover:bg-white/50 transition-colors"
+        title="Скрыть"
+      >
+        <X className="size-3.5" />
+      </button>
+      <div className="mb-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--peach-deep)" }}>
+        Как запустить рекламу
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {steps.map((s) => (
+          <div key={s.n} className="flex items-start gap-2.5">
+            <div
+              className="mt-0.5 size-6 shrink-0 rounded-full flex items-center justify-center font-mono text-[12px] font-semibold text-white"
+              style={{ background: "var(--peach)" }}
+            >
+              {s.n}
+            </div>
+            <div>
+              <div className="text-[13px] font-semibold text-[var(--ink)] leading-tight">
+                {s.title}
+              </div>
+              <div className="text-[11.5px] text-[var(--peach-ink)]/75 leading-snug mt-0.5">
+                {s.body}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+// ── Per-card profile readiness ───────────────────────────────────────────
+
+// Compact readiness pill + a hint of which action to take next. Green when
+// the offer profile is filled enough for good creatives, peach when it still
+// needs answers.
+function ReadinessPill({ score }: { score: number }) {
+  const ready = score >= 60;
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.04em]"
+      style={{
+        background: ready ? "var(--sage-soft)" : "var(--peach-wash)",
+        color: ready ? "#456838" : "var(--peach-deep)",
+      }}
+      title={ready ? "Профиль заполнен — креативы будут сильными" : "Заполни профиль, чтобы креативы стали конкретными"}
+    >
+      {ready ? <Check className="size-2.5" strokeWidth={3} /> : null}
+      Профиль {score}%
+    </span>
+  );
 }
