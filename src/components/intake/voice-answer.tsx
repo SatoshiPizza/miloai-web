@@ -40,15 +40,22 @@ function getRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
 export function VoiceAnswer({
   placeholder,
   busy,
+  value,
+  onChange,
   onSubmit,
   lang = "ru-RU",
 }: {
   placeholder: string;
   busy: boolean;
+  /** Controlled text — the parent keeps one per block, so switching blocks
+   *  preserves each block's own answer instead of sharing a single field. */
+  value: string;
+  onChange: (text: string) => void;
   onSubmit: (text: string) => void;
   lang?: string;
 }) {
-  const [text, setText] = useState("");
+  const text = value;
+  const setText = onChange;
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(false);
   const recogRef = useRef<SpeechRecognitionLike | null>(null);
@@ -91,7 +98,7 @@ export function VoiceAnswer({
     recogRef.current = r;
     r.start();
     setListening(true);
-  }, [listening, text, lang]);
+  }, [listening, text, lang, setText]);
 
   const canSend = text.trim().length >= 3 && !busy;
 

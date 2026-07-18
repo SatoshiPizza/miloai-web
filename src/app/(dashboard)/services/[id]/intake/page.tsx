@@ -72,6 +72,10 @@ export default function OfferIntakePage() {
   const [loading, setLoading] = useState(true);
   const [activeBlock, setActiveBlock] = useState<IntakeBlock>("economics");
   const [busy, setBusy] = useState(false);
+  // Raw answer text per block — kept at page level so each block remembers its
+  // own input across tab switches (and after submit), instead of a single
+  // shared textarea that bled one block's answer into the next.
+  const [texts, setTexts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!Number.isFinite(serviceId)) return;
@@ -88,16 +92,13 @@ export default function OfferIntakePage() {
       try {
         const next = await tgBridge.intakeExtract(serviceId, activeBlock, text);
         setState(next);
-        // Auto-advance to the next block the user hasn't answered yet. Uses
-        // actual per-block data presence, NOT weakest_blocks (which is a
-        // "biggest score gap" ranking — a high-weight block like buyers can
-        // stay in it even when fully answered, which used to strand the user).
+        // Advance strictly to the NEXT block in order — predictable, matches
+        // how the user reads the tabs left-to-right. (Earlier "jump to first
+        // empty block" felt like a random skip when an earlier block already
+        // had data.) Stay put on the last block.
         const order: IntakeBlock[] = ["economics", "buyers", "proof", "entry_point"];
         const idx = order.indexOf(activeBlock);
-        const nextEmpty =
-          order.slice(idx + 1).find((b) => !blockHasData(b, next.offer_profile)) ??
-          order.find((b) => !blockHasData(b, next.offer_profile));
-        if (nextEmpty && nextEmpty !== activeBlock) setActiveBlock(nextEmpty);
+        if (idx >= 0 && idx < order.length - 1) setActiveBlock(order[idx + 1]);
         toast.success("Записал. Профиль обновлён.");
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "не удалось разобрать");
@@ -178,9 +179,10 @@ export default function OfferIntakePage() {
               </div>
             </div>
             <VoiceAnswer
-              key={activeBlock}
               placeholder={def.placeholder}
               busy={busy}
+              value={texts[activeBlock] ?? ""}
+              onChange={(t) => setTexts((p) => ({ ...p, [activeBlock]: t }))}
               onSubmit={submitAnswer}
             />
           </div>
