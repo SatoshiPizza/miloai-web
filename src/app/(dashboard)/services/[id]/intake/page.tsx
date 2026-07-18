@@ -18,7 +18,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Sparkles, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
-import { tgBridge, type IntakeBlock, type OfferProfileResponse } from "@/lib/tg-bridge";
+import { tgBridge, type IntakeBlock, type OfferProfile, type OfferProfileResponse } from "@/lib/tg-bridge";
 import { VoiceAnswer } from "@/components/intake/voice-answer";
 import { EditableChips, type ChipField } from "@/components/intake/editable-chips";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -88,14 +88,16 @@ export default function OfferIntakePage() {
       try {
         const next = await tgBridge.intakeExtract(serviceId, activeBlock, text);
         setState(next);
-        // Auto-advance to the next block that still has room, so the user
-        // flows through without hunting for the next tab.
+        // Auto-advance to the next block the user hasn't answered yet. Uses
+        // actual per-block data presence, NOT weakest_blocks (which is a
+        // "biggest score gap" ranking — a high-weight block like buyers can
+        // stay in it even when fully answered, which used to strand the user).
         const order: IntakeBlock[] = ["economics", "buyers", "proof", "entry_point"];
-        const remaining = order.filter((b) => next.weakest_blocks.includes(b));
         const idx = order.indexOf(activeBlock);
-        const nextBlock =
-          remaining.find((b) => order.indexOf(b) > idx) ?? remaining[0];
-        if (nextBlock && nextBlock !== activeBlock) setActiveBlock(nextBlock);
+        const nextEmpty =
+          order.slice(idx + 1).find((b) => !blockHasData(b, next.offer_profile)) ??
+          order.find((b) => !blockHasData(b, next.offer_profile));
+        if (nextEmpty && nextEmpty !== activeBlock) setActiveBlock(nextEmpty);
         toast.success("Записал. Профиль обновлён.");
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "не удалось разобрать");
@@ -144,7 +146,9 @@ export default function OfferIntakePage() {
           <div className="flex flex-wrap gap-2">
             {BLOCKS.map((b) => {
               const active = b.key === activeBlock;
-              const done = state ? !state.weakest_blocks.includes(b.key) : false;
+              // "Done" = this block has any answer, computed from its own data
+              // — not from weakest_blocks (a cross-block ranking).
+              const done = state ? blockHasData(b.key, state.offer_profile) : false;
               return (
                 <button
                   key={b.key}
@@ -174,6 +178,7 @@ export default function OfferIntakePage() {
               </div>
             </div>
             <VoiceAnswer
+              key={activeBlock}
               placeholder={def.placeholder}
               busy={busy}
               onSubmit={submitAnswer}
@@ -303,6 +308,17 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   );
 }
 
+
+// True if the user has given any answer for this block — drives the tab
+// checkmark and auto-advance. Reads the block's own fields, so a filled block
+// always registers as done regardless of how complete the others are.
+function blockHasData(block: IntakeBlock, profile: OfferProfile | undefined): boolean {
+  const b = (profile?.[block] ?? {}) as Record<string, unknown>;
+  return Object.values(b).some((v) => {
+    if (Array.isArray(v)) return v.length > 0;
+    return v !== null && v !== undefined && v !== "";
+  });
+}
 
 // Map the raw offer_profile block into display chips.
 function chipsForBlock(block: IntakeBlock, state: OfferProfileResponse): ChipField[] {
