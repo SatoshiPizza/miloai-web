@@ -400,8 +400,9 @@ function CreativeCard({
 
   return (
     <div className="group relative rounded-[14px] border border-[var(--border)] bg-card overflow-hidden flex flex-col">
-      {/* Hover actions — regenerate / delete this one creative. */}
-      <div className="absolute top-2.5 left-2.5 z-20 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Always-visible per-creative actions — regenerate / delete this one.
+          (Hover-only was invisible until you hovered exactly right.) */}
+      <div className="absolute top-2.5 left-2.5 z-20 flex gap-1.5">
         <button
           onClick={async () => {
             setRegenBusy(true);
@@ -409,18 +410,18 @@ function CreativeCard({
           }}
           disabled={regenBusy}
           title="Перегенерировать этот креатив"
-          className="size-7 rounded-full bg-white/95 flex items-center justify-center shadow-sm hover:bg-white transition-colors disabled:opacity-60"
+          className="size-8 rounded-full bg-white flex items-center justify-center shadow-md hover:bg-[var(--peach-wash)] transition-colors disabled:opacity-60"
         >
           {regenBusy
-            ? <Loader2 className="size-3.5 animate-spin text-[var(--peach-deep)]" />
-            : <Sparkles className="size-3.5 text-[var(--peach-deep)]" />}
+            ? <Loader2 className="size-4 animate-spin text-[var(--peach-deep)]" />
+            : <Sparkles className="size-4 text-[var(--peach-deep)]" />}
         </button>
         <button
           onClick={onDelete}
           title="Удалить креатив"
-          className="size-7 rounded-full bg-white/95 flex items-center justify-center shadow-sm hover:bg-white transition-colors"
+          className="size-8 rounded-full bg-white flex items-center justify-center shadow-md hover:bg-[#F8DDD0] transition-colors"
         >
-          <Trash2 className="size-3.5 text-[var(--destructive)]" />
+          <Trash2 className="size-4 text-[var(--destructive)]" />
         </button>
       </div>
 

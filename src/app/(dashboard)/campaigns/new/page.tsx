@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, ArrowRight, Rocket, Sparkles, Check, AlertTriangle, X,
-  Loader2, Plug, Bell, Pencil, ExternalLink, Upload, Image as ImageIconLucide,
+  Loader2, Plug, Bell, Pencil, ExternalLink, Upload, Image as ImageIconLucide, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1427,8 +1427,44 @@ function CreativePreview({
   // otherwise stable and would serve the cached image).
   const [refreshKey, setRefreshKey] = useState(0);
   const [autoRegenDone, setAutoRegenDone] = useState(false);
+  // Local copy of the previews so per-banner delete/regenerate can update this
+  // step without threading state back through the parent wizard.
+  const [localPreviews, setLocalPreviews] = useState(service?.banner_previews ?? []);
+  const [variantBusy, setVariantBusy] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const serviceId = service?.id ?? null;
+
+  useEffect(() => {
+    setLocalPreviews(service?.banner_previews ?? []);
+  }, [service?.id, service?.banner_previews]);
+
+  async function deleteOne(index: number) {
+    if (serviceId == null) return;
+    if (!confirm("Удалить этот креатив?")) return;
+    try {
+      await tgBridge.deleteVariant(serviceId, index);
+      setLocalPreviews((p) => p.filter((_, i) => i !== index));
+      setRefreshKey((k) => k + 1);
+      toast.success("Креатив удалён");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось удалить");
+    }
+  }
+
+  async function regenOne(index: number) {
+    if (serviceId == null) return;
+    setVariantBusy(index);
+    try {
+      const updated = await tgBridge.regenerateVariant(serviceId, index);
+      setLocalPreviews(updated.banner_previews);
+      setRefreshKey((k) => k + 1);
+      toast.success("Креатив перегенерирован");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось перегенерить");
+    } finally {
+      setVariantBusy(null);
+    }
+  }
 
   const loadStatus = useCallback(() => {
     if (serviceId == null) return;
@@ -1482,8 +1518,6 @@ function CreativePreview({
     );
   }
 
-  const previews = service.banner_previews || [];
-  const hasCreatives = previews.length > 0;
   const brand = service.name;
 
   return (
@@ -1508,7 +1542,7 @@ function CreativePreview({
         <div className="text-[12.5px] text-[var(--ink-mute)]">
           <b className="text-[var(--ink)]">{service.name}</b>
           {" · "}
-          {hasCreatives ? `${previews.length} варианта` : "нет креативов"}
+          {localPreviews.length > 0 ? `${localPreviews.length} варианта` : "нет креативов"}
           {status?.content_stale && (
             <span className="ml-2 text-[var(--peach-deep)]">· обновляю…</span>
           )}
@@ -1524,20 +1558,41 @@ function CreativePreview({
         </button>
       </div>
 
-      {hasCreatives ? (
+      {localPreviews.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          {previews.slice(0, 3).map((v, i) => (
-            <ServiceBanner
-              key={i}
-              serviceId={service.id}
-              index={i}
-              headline={v.headline || service.name}
-              subheadline={v.subheadline}
-              colorScheme={v.color_scheme}
-              platform="meta"
-              brand={brand}
-              refreshKey={refreshKey}
-            />
+          {localPreviews.slice(0, 3).map((v, i) => (
+            <div key={i} className="relative">
+              {/* Per-banner actions — always visible, top-left. */}
+              <div className="absolute top-2 left-2 z-20 flex gap-1.5">
+                <button
+                  onClick={() => regenOne(i)}
+                  disabled={variantBusy === i}
+                  title="Перегенерировать этот баннер"
+                  className="size-7 rounded-full bg-white flex items-center justify-center shadow-md hover:bg-[var(--peach-wash)] transition-colors disabled:opacity-60"
+                >
+                  {variantBusy === i
+                    ? <Loader2 className="size-3.5 animate-spin text-[var(--peach-deep)]" />
+                    : <Sparkles className="size-3.5 text-[var(--peach-deep)]" />}
+                </button>
+                <button
+                  onClick={() => deleteOne(i)}
+                  title="Удалить баннер"
+                  className="size-7 rounded-full bg-white flex items-center justify-center shadow-md hover:bg-[#F8DDD0] transition-colors"
+                >
+                  <Trash2 className="size-3.5 text-[var(--destructive)]" />
+                </button>
+              </div>
+              <ServiceBanner
+                serviceId={service.id}
+                index={i}
+                headline={v.headline || service.name}
+                subheadline={v.subheadline}
+                colorScheme={v.color_scheme}
+                platform="meta"
+                brand={brand}
+                refreshKey={refreshKey}
+              />
+            </div>
           ))}
         </div>
       ) : (
