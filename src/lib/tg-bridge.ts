@@ -534,6 +534,10 @@ export const tgBridge = {
     api.del<void>(`/api/web/services/${id}`),
   regenerateServiceCreatives: (id: number) =>
     api.post<ServiceSummary>(`/api/web/services/${id}/regenerate`),
+  deleteVariant: (serviceId: number, index: number) =>
+    api.del<void>(`/api/web/services/${serviceId}/variants/${index}`),
+  regenerateVariant: (serviceId: number, index: number) =>
+    api.post<ServiceSummary>(`/api/web/services/${serviceId}/variants/${index}/regenerate`),
 
   /** ── Offer intake ───────────────────────────────────────
    *  Deep per-product profile, collected at first launch. extract sends a

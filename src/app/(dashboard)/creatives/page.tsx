@@ -66,6 +66,32 @@ export default function CreativesPage() {
       .catch(() => setPhotoCount(0));
   }, []);
 
+  // Delete one banner variant from a service. Reloads the service list so the
+  // gallery reflects the removed card (indices shift, so a full refresh is
+  // simplest and correct).
+  async function handleDeleteVariant(serviceId: number, index: number) {
+    if (!confirm("Удалить этот креатив?")) return;
+    try {
+      await tgBridge.deleteVariant(serviceId, index);
+      const fresh = await tgBridge.services();
+      setServices(fresh);
+      toast.success("Креатив удалён");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось удалить");
+    }
+  }
+
+  // Regenerate one variant — swaps that card's headline/angle/photo only.
+  async function handleRegenVariant(serviceId: number, index: number) {
+    try {
+      const updated = await tgBridge.regenerateVariant(serviceId, index);
+      setServices((prev) => (prev ?? []).map((s) => (s.id === updated.id ? updated : s)));
+      toast.success("Креатив перегенерирован");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "не удалось перегенерить");
+    }
+  }
+
   async function regenerateAll() {
     if (!services || services.length === 0) {
       toast.error("Нет услуг для регенерации");
@@ -218,7 +244,14 @@ export default function CreativesPage() {
         <EmptyState hasAny={creatives.length > 0} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {filtered.map((c) => <CreativeCard key={c.key} creative={c} />)}
+          {filtered.map((c) => (
+            <CreativeCard
+              key={c.key}
+              creative={c}
+              onDelete={() => handleDeleteVariant(c.service.id, c.index)}
+              onRegen={() => handleRegenVariant(c.service.id, c.index)}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -353,11 +386,44 @@ function BannerImage({ creative, tint }: { creative: Creative; tint: string }) {
 }
 
 
-function CreativeCard({ creative }: { creative: Creative }) {
+function CreativeCard({
+  creative,
+  onDelete,
+  onRegen,
+}: {
+  creative: Creative;
+  onDelete: () => void;
+  onRegen: () => void;
+}) {
   const tint = resolveTint(creative.preview.color_scheme);
+  const [regenBusy, setRegenBusy] = useState(false);
 
   return (
-    <div className="rounded-[14px] border border-[var(--border)] bg-card overflow-hidden flex flex-col">
+    <div className="group relative rounded-[14px] border border-[var(--border)] bg-card overflow-hidden flex flex-col">
+      {/* Hover actions — regenerate / delete this one creative. */}
+      <div className="absolute top-2.5 left-2.5 z-20 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={async () => {
+            setRegenBusy(true);
+            try { await onRegen(); } finally { setRegenBusy(false); }
+          }}
+          disabled={regenBusy}
+          title="Перегенерировать этот креатив"
+          className="size-7 rounded-full bg-white/95 flex items-center justify-center shadow-sm hover:bg-white transition-colors disabled:opacity-60"
+        >
+          {regenBusy
+            ? <Loader2 className="size-3.5 animate-spin text-[var(--peach-deep)]" />
+            : <Sparkles className="size-3.5 text-[var(--peach-deep)]" />}
+        </button>
+        <button
+          onClick={onDelete}
+          title="Удалить креатив"
+          className="size-7 rounded-full bg-white/95 flex items-center justify-center shadow-sm hover:bg-white transition-colors"
+        >
+          <Trash2 className="size-3.5 text-[var(--destructive)]" />
+        </button>
+      </div>
+
       {/* Real rendered banner PNG from backend. Falls back to the
           gradient+text placeholder while loading / on error so the card
           still communicates the layout. */}
